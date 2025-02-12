@@ -1,0 +1,14 @@
+<world name="default">
+    <include>
+        <uri>model://ground_plane</uri>
+    </include>
+    <include>
+        <uri>model://sun</uri>
+    </include>
+    <model name="my_robot">
+        <pose>0 0 0 0 0 0</pose>
+        <include>
+            <uri>model://robot</uri>
+        </include>
+    </model>
+</world>
