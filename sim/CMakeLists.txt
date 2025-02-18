@@ -7,9 +7,24 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+
+
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
+
+# SETUP THE UNICYCLE MODEL
+add_executable(unicycle_model_node src/UnicycleModelNode.cpp)
+ament_target_dependencies(unicycle_model_node rclcpp geometry_msgs Eigen3)
+target_include_directories(unicycle_model_node 
+  PUBLIC 
+  ${PROJECT_SOURCE_DIR}/include
+)
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -22,6 +37,16 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+install(TARGETS
+  unicycle_model_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  include/
+  DESTINATION share/${PROJECT_NAME}/install
+)
 
 # INSTALL VARIOUS SIMULATION FILES
 
