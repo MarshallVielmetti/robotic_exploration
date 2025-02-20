@@ -1,0 +1,56 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/opt/ros/jazzy/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/exploration_manager/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/exploration_preprocessing/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/exploration_utils/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/fast_planner/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/pathfinding/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/trajectory/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/falcon_planner/voxel_mapping/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/camera_sensing/mesh_render/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/camera_sensing/pointcloud_render/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/so3_control/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/so3_disturbance_generator/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/so3_quadrotor_simulator/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/utils/multi_map_server/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/utils/pose_utils/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/utils/quadrotor_msgs/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FALCON/uav_simulator/utils/uav_utils/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/active_perception/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/bspline/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/bspline_opt/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/exploration_manager/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/path_searching/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/plan_env/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/plan_manage/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/poly_traj/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/traj_utils/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/fuel_planner/utils/lkh_tsp_solver/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/Utils/multi_map_server/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/Utils/pose_utils/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/Utils/quadrotor_msgs/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/Utils/uav_utils/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/local_sensing/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/so3_control/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/so3_disturbance_generator/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/FUEL/uav_simulator/so3_quadrotor_simulator/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/robotic_exploration/exploration_sim_gazebo/include/**",
+        "/home/marshallvielmetti/ros2_ws/src/robotic_exploration/sim/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

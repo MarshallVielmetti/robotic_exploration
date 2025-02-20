@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.5)
 
 # Following directive defines the project name.
-project(ros_gz_example_gazebo)
+project(exploration_sim_gazebo)
 
 
 # Following directives find required packages and load their configuration.
 # The 'set' directive defines a variable (e.g. 'GZ_PLUGIN_VER').
 # Such variables can be used lateron in the CMakeLists.txt file.
 find_package(ament_cmake REQUIRED)
-find_package(ros_gz_example_description REQUIRED)
+find_package(exploration_sim_description REQUIRED)
 
 find_package(gz-cmake3 REQUIRED)
 find_package(gz-plugin2 REQUIRED COMPONENTS register)
@@ -17,16 +17,16 @@ find_package(gz-common5 REQUIRED COMPONENTS profiler)
 set(GZ_COMMON_VER ${gz-common5_VERSION_MAJOR})
 
 # Harmonic
-if("$ENV{GZ_VERSION}" STREQUAL "harmonic")
-  find_package(gz-sim8 REQUIRED)
-  set(GZ_SIM_VER ${gz-sim8_VERSION_MAJOR})
-  message(STATUS "Compiling against Gazebo Harmonic")
+# if("$ENV{GZ_VERSION}" STREQUAL "harmonic")
+find_package(gz-sim8 REQUIRED)
+set(GZ_SIM_VER ${gz-sim8_VERSION_MAJOR})
+message(STATUS "Compiling against Gazebo Harmonic")
 # Default to Garden
-else()
-  find_package(gz-sim7 REQUIRED)
-  set(GZ_SIM_VER ${gz-sim7_VERSION_MAJOR})
-  message(STATUS "Compiling against Gazebo Garden")
-endif()
+# else()
+#   find_package(gz-sim7 REQUIRED)
+#   set(GZ_SIM_VER ${gz-sim7_VERSION_MAJOR})
+#   message(STATUS "Compiling against Gazebo Garden")
+# endif()
 
 
 # Following 'add_library' directive defines a library target named 'BasicSystem'.
@@ -72,7 +72,7 @@ target_link_libraries(FullSystem PRIVATE
 
 # Following 'install' directive ensures that the compiled libraries
 # of the 'BasicSystem' and 'FullSystem' targets will be copied
-# to the subfolder 'lib/ros_gz_example_gazebo' of the install directory.
+# to the subfolder 'lib/exploration_sim_gazebo' of the install directory.
 install(
   TARGETS BasicSystem FullSystem
   DESTINATION lib/${PROJECT_NAME}
@@ -80,7 +80,7 @@ install(
 
 
 # Following 'install' directive ensures that the 'worlds' subfolder
-# will be copied to the 'share/ros_gz_example_gazebo/worlds'
+# will be copied to the 'share/exploration_sim_gazebo/worlds'
 # subfolder of the installation directory.
 install(
   DIRECTORY worlds/

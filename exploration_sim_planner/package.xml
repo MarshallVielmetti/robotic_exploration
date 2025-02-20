@@ -1,18 +1,23 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>exploration_sim_gazebo</name>
+  <name>exploration_sim_planner</name>
   <version>0.0.0</version>
-  <description>Gazebo-specific implementations for the exploration_sim project</description>
+  <description>All high level planning for the exploration_simulator</description>
   <maintainer email="mvielmet@umich.edu">Marshall Vielmetti</maintainer>
-  <license>Apache 2.0</license>
-  <author>Marshall Vielmetti</author>
+  <license>MIT</license>
 
-  <depend>exploration_sim_description</depend>
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+
+  <depend>Eigen3</depend>
+
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
