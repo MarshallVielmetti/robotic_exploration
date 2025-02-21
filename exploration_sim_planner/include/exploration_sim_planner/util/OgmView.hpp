@@ -49,7 +49,7 @@ public:
    * @return The occupancy value at the specified point.
    */
   int8_t get_point(const Eigen::Vector2d &point) {
-    const Eigen::Vector2d cell = world_to_cell(point);
+    const Eigen::Vector2i cell = world_to_cell(point);
     return get(cell.x(), cell.y());
   }
 
@@ -70,8 +70,10 @@ public:
    * @return The grid cell coordinates corresponding to the world coordinates.
    */
   Eigen::Vector2i world_to_cell(const Eigen::Vector2d &point) {
+    assert(point.x() >= origin_.x() && point.y() >= origin_.y());
+
     // floors the value to the nearest integer
-    const Eigen::Vector2i cell = (point - origin_) / resolution_;
+    const Eigen::Vector2i cell = ((point - origin_) / resolution_).cast<int>();
 
     return cell;
   }

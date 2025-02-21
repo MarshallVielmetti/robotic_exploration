@@ -1,7 +1,23 @@
 #include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
+#include "Eigen/src/Core/Matrix.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
+#include <cstddef>
+#include <functional>
+#include <memory>
 #include <queue>
+#include <rclcpp/clock.hpp>
+#include <unordered_map>
+
+namespace std {
+template <> struct hash<Eigen::Vector2i> {
+  std::size_t operator()(const Eigen::Vector2i &v) const {
+    std::size_t h1 = std::hash<int>()(v.x());
+    std::size_t h2 = std::hash<int>()(v.y());
+    return h1 ^ (h2 << 1);
+  }
+};
+} // namespace std
 
 nav_msgs::msg::Path AStarPathPlanner::operator()(
     const geometry_msgs::msg::PoseStamped::SharedPtr goal,
@@ -30,18 +46,118 @@ std::vector<Eigen::Vector2i>
 AStarPathPlanner::exec_astar(Eigen::Vector2i start_cell,
                              Eigen::Vector2i goal_cell) {
 
-  std::vector<std::vector<Node>> nodes(ogm_->width(),
-                                       std::vector<Node>(ogm_->height()));
+  auto comparator = PathPlannerUtil::PqNodeCompare(goal_cell);
 
-  auto node_provider = NodeProvider(ogm_.get(), goal_cell);
-  // A* path planning algorithm implementation
+  std::priority_queue<std::shared_ptr<PathPlannerUtil::PqNode>,
+                      std::vector<std::shared_ptr<PathPlannerUtil::PqNode>>,
+                      PathPlannerUtil::PqNodeCompare>
+      open_set(comparator);
 
-  std::priority_queue<Node *, std::vector<Node *>, NodePtrCompare> open_set;
+  std::unordered_map<Eigen::Vector2i, std::shared_ptr<PathPlannerUtil::PqNode>>
+      closed_set;
 
   // Add the start node to the open set
-  open_set.push(node_provider.get_node(start_cell, 0));
+  open_set.push(
+      std::make_shared<PathPlannerUtil::PqNode>(start_cell, 0, nullptr));
 
-  //
+  // A* path planning algorithm implementation
   while (!open_set.empty()) {
+    auto curr = open_set.top();
+    open_set.pop();
+
+    if (curr->cell == goal_cell) {
+      // goal reached
+      return reconstruct_cell_path(curr);
+    }
+
+    // if this cell has already been visited with a lower cost, then just
+    // continue
+    if (closed_set.contains(curr->cell) &&
+        closed_set[curr->cell]->g <= curr->g) {
+      continue;
+    }
+
+    closed_set[curr->cell] = curr;
+
+    auto valid_neighbors = get_valid_neighbors(curr->cell);
+
+    for (auto &neighbor : valid_neighbors) {
+      double g = curr->g + 1; // cost to move to the neighbor cell
+
+      // check if the neighbor cell is already in the closed set
+      if (closed_set.contains(neighbor) && closed_set[neighbor]->g <= g) {
+        continue;
+      }
+
+      // add to the open set
+      open_set.push(
+          std::make_shared<PathPlannerUtil::PqNode>(neighbor, g, curr));
+    }
   }
+
+  // if got here, then failed to find a path
+  return {};
+}
+
+std::vector<Eigen::Vector2i> AStarPathPlanner::reconstruct_cell_path(
+    std::shared_ptr<PathPlannerUtil::PqNode> end_node) {
+  std::vector<Eigen::Vector2i> cell_path;
+
+  auto curr = end_node;
+  while (curr) {
+    cell_path.push_back(curr->cell);
+    curr = curr->parent;
+  }
+
+  std::reverse(cell_path.begin(), cell_path.end());
+
+  return cell_path;
+}
+
+std::vector<Eigen::Vector2i>
+AStarPathPlanner::get_valid_neighbors(const Eigen::Vector2i &cell) {
+  std::vector<Eigen::Vector2i> neighbors;
+
+  for (int dx = -1; dx <= 1; ++dx) {
+    for (int dy = -1; dy <= 1; ++dy) {
+
+      if (dx == 0 && dy == 0) {
+        continue;
+      }
+
+      // check if the neighbor cell is occupied
+      try {
+        if (ogm_->get(cell.x() + dx, cell.y() + dy) != 0) {
+          continue;
+        }
+      } catch (const std::out_of_range &e) {
+        continue;
+      }
+
+      neighbors.push_back(cell + Eigen::Vector2i(dx, dy));
+    }
+  }
+
+  return neighbors;
+}
+
+nav_msgs::msg::Path AStarPathPlanner::cell_to_world_path(
+    const std::vector<Eigen::Vector2i> &cell_path) {
+  nav_msgs::msg::Path path;
+
+  for (const auto &cell : cell_path) {
+    geometry_msgs::msg::PoseStamped pose;
+    pose.pose.position.x = ogm_->cell_to_world(cell).x();
+    pose.pose.position.y = ogm_->cell_to_world(cell).y();
+    pose.pose.orientation.w = 1.0;
+    pose.header.frame_id = "diff_drive/odom";
+    pose.header.stamp = rclcpp::Clock().now();
+
+    path.poses.push_back(pose);
+  }
+
+  path.header.frame_id = "diff_drive";
+  path.header.stamp = rclcpp::Clock().now();
+
+  return path;
 }

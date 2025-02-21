@@ -7,6 +7,71 @@
 #include <memory>
 #include <vector>
 
+/**
+ * @brief Utility structures for the A* path planning algorithm.
+ *
+ * The namespace provides structures that allow efficient node management for
+ * the planner.
+ */
+
+namespace PathPlannerUtil {
+/**
+ * @brief Represents a node in the priority queue used by the A* algorithm.
+ *
+ * Each node stores a cell position, the cost to reach that cell from the start
+ * (g), and a pointer to its parent node to allow path reconstruction once the
+ * goal is reached.
+ *
+ * @param cell A 2D integer vector representing the cell's coordinates.
+ * @param g The accumulated cost from the starting cell to the current cell.
+ * @param parent Pointer to the parent node in the path.
+ */
+struct PqNode {
+public:
+  PqNode(Eigen::Vector2i cell, double g, std::shared_ptr<PqNode> parent)
+      : cell{cell}, g{g}, parent{parent} {}
+
+  Eigen::Vector2i cell;
+  double g; // cost to reach the node
+
+  std::shared_ptr<PqNode> parent;
+};
+
+/**
+ * @brief Comparator functor for nodes in the priority queue.
+ *
+ * This functor compares two nodes based on the sum of the cost to reach the
+ * node (g) and an heuristic estimate (Euclidean distance) from the node to the
+ * goal cell. The node with the lower sum is given higher priority, facilitating
+ * efficient A* search.
+ *
+ * @param goal_cell The target cell used to compute the heuristic.
+ */
+struct PqNodeCompare {
+  PqNodeCompare(Eigen::Vector2i goal_cell) : goal_cell{goal_cell} {}
+
+  bool operator()(const std::shared_ptr<PqNode> &lhs,
+                  const std::shared_ptr<PqNode> &rhs) const {
+    auto lhs_cost = lhs->g + (lhs->cell - goal_cell).norm();
+    auto rhs_cost = rhs->g + (rhs->cell - goal_cell).norm();
+    return lhs_cost < rhs_cost;
+  }
+
+private:
+  Eigen::Vector2i goal_cell;
+};
+
+}; // namespace PathPlannerUtil
+
+/**
+ * @class AStarPathPlanner
+ * @brief Implements the A* algorithm for path planning in occupancy grid maps.
+ *
+ * Usage:
+ *   Created an instance of AStarPathPlanner and invoke the operator() to
+ * compute the path, supplying the goal pose, map, and current pose.
+ *
+ */
 class AStarPathPlanner : public AbstractPathPlanner {
 public:
   AStarPathPlanner() = default;
@@ -18,90 +83,16 @@ public:
              const geometry_msgs::msg::PoseStamped::SharedPtr pose) override;
 
 private:
-  class Node {
-  public:
-    Node(OgmView *ogm, Eigen::Vector2i cell, double g, double h, Node *parent)
-        : g{g}, h{h}, parent{parent}, ogm{ogm} {}
-
-    double f() const { return g + h; }
-    std::vector<std::unique_ptr<Node>> neighbors() const {
-      std::vector<std::unique_ptr<Node>> neighbors;
-
-      // loop through all the neighbors of the current cell
-      for (int dx = -1; dx <= 1; ++dx) {
-        for (int dy = -1; dy <= 1; ++dy) {
-
-          if (dx == 0 && dy == 0) {
-            continue;
-          }
-
-          Eigen::Vector2i new_cell = cell + Eigen::Vector2i{dx, dy};
-          int8_t occupancy; // from ogm message definition, 1 is occupied, 0 is
-                            // unoccupied, -1 is uknown
-
-          try {
-            occupancy = ogm->get(new_cell.x(), new_cell.y());
-          } catch (const std::out_of_range &e) {
-            occupancy = -1;
-          }
-
-          // only add the cell if it is definitely unoccupied.
-          if (occupancy != 0) {
-            continue;
-          }
-
-          // add the valid neighbor cell to the list of neighbors
-          neighbors.emplace_back(ogm, new_cell, g + 1, 0, this);
-        }
-      }
-
-      return neighbors;
-    }
-
-    double g;
-    double h;
-    Eigen::Vector2i cell;
-    Node *parent;
-
-    bool operator<(const Node &other) const { return f() > other.f(); }
-
-  private:
-    OgmView *ogm;
-  };
-
-  class NodeProvider {
-  public:
-    NodeProvider(OgmView *ogm, Eigen::Vector2i goal_cell)
-        : ogm_(ogm), goal_cell_(goal_cell) {
-
-      nodes_ = std::vector<std::vector<Node>>(
-          ogm_->width(), std::vector<Node>(ogm_->height()));
-    }
-
-    std::unique_ptr<Node> get_node(Eigen::Vector2i cell, double g,
-                                   Node *parent) {
-      return std::make_unique<Node>(ogm_, cell, g, h, parent);
-    }
-
-  private:
-    OgmView *ogm_;
-    Eigen::Vector2i goal_cell_;
-
-    std::vector<std::vector<Node>> nodes_;
-  };
-
-  // compare two node* for a priority queue using builtin comparison
-  struct NodePtrCompare {
-    bool operator()(const Node *lhs, const Node *rhs) const {
-      return *lhs < *rhs;
-    }
-  }
-
   std::vector<Eigen::Vector2i>
-  exec_astar(Eigen::Vector2i start_cell, Eigen::Vector2i goal_cell);
+  reconstruct_cell_path(std::shared_ptr<PathPlannerUtil::PqNode> end_node);
+
+  std::vector<Eigen::Vector2i> exec_astar(Eigen::Vector2i start_cell,
+                                          Eigen::Vector2i goal_cell);
 
   nav_msgs::msg::Path
   cell_to_world_path(const std::vector<Eigen::Vector2i> &cell_path);
+
+  std::vector<Eigen::Vector2i> get_valid_neighbors(const Eigen::Vector2i &cell);
 
 private:
   std::shared_ptr<OgmView> ogm_;
