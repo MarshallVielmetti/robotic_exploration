@@ -20,6 +20,11 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
+set(Torch_DIR "/home/marshallvielmetti/Documents/torch/libtorch/share/cmake/Torch")
+find_package(Torch REQUIRED)
+include_directories(${TORCH_INCLUDE_DIRS})
+# target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
+
 add_executable(path_planner src/PathPlannerNode.cpp src/path_planner/AStarPathPlanner.cpp)
 ament_target_dependencies(path_planner rclcpp nav_msgs geometry_msgs Eigen3)
 target_include_directories(path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
@@ -27,6 +32,10 @@ target_include_directories(path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 add_executable(pose_listener src/PoseTransformListenerNode.cpp)
 ament_target_dependencies(pose_listener rclcpp geometry_msgs tf2 tf2_ros Eigen3)
 target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(trajectory_tracker src/TrajectoryTrackerNode.cpp src/trajectory_tracker/MPPITrajectoryTracker.cpp)
+ament_target_dependencies(trajectory_tracker rclcpp nav_msgs geometry_msgs Eigen3 Torch)
+target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
 ## INSTALL TARGETS ##
