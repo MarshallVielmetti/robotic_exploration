@@ -82,7 +82,10 @@ AStarPathPlanner::exec_astar(Eigen::Vector2i start_cell,
     auto valid_neighbors = get_valid_neighbors(curr->cell);
 
     for (auto &neighbor : valid_neighbors) {
-      double g = curr->g + 1; // cost to move to the neighbor cell
+      auto delta = neighbor - curr->cell;
+
+      // account for diagonal moves
+      double g = curr->g + (delta.norm() > 1 ? 1.5 : 1);
 
       // check if the neighbor cell is already in the closed set
       if (closed_set.contains(neighbor) && closed_set[neighbor]->g <= g) {
@@ -145,19 +148,24 @@ nav_msgs::msg::Path AStarPathPlanner::cell_to_world_path(
     const std::vector<Eigen::Vector2i> &cell_path) {
   nav_msgs::msg::Path path;
 
+  auto now = rclcpp::Clock().now();
+  std::string frame_id = "diff_drive/odom";
+
   for (const auto &cell : cell_path) {
     geometry_msgs::msg::PoseStamped pose;
-    pose.pose.position.x = ogm_->cell_to_world(cell).x();
-    pose.pose.position.y = ogm_->cell_to_world(cell).y();
+    auto world_point = ogm_->cell_to_world(cell);
+    pose.pose.position.x = world_point.x();
+    pose.pose.position.y = world_point.y();
+    pose.pose.orientation.z = 0.0;
     pose.pose.orientation.w = 1.0;
-    pose.header.frame_id = "diff_drive/odom";
-    pose.header.stamp = rclcpp::Clock().now();
+    pose.header.frame_id = frame_id;
+    pose.header.stamp = now;
 
     path.poses.push_back(pose);
   }
 
-  path.header.frame_id = "diff_drive";
-  path.header.stamp = rclcpp::Clock().now();
+  path.header.frame_id = frame_id;
+  path.header.stamp = now;
 
   return path;
 }

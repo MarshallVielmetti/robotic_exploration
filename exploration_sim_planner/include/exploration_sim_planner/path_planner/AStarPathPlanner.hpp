@@ -54,7 +54,7 @@ struct PqNodeCompare {
                   const std::shared_ptr<PqNode> &rhs) const {
     auto lhs_cost = lhs->g + (lhs->cell - goal_cell).norm();
     auto rhs_cost = rhs->g + (rhs->cell - goal_cell).norm();
-    return lhs_cost < rhs_cost;
+    return lhs_cost > rhs_cost;
   }
 
 private:
