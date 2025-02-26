@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'path_grapher = exploration_sim_utils.PathGrapher:main',
+            'fit_splines = exploration_sim_utils.FitSplines:main',
         ],
     },
 )

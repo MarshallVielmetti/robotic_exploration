@@ -1,6 +1,7 @@
 #include "exploration_sim_planner/PathPlannerNode.hpp"
-
 #include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
+
+#include <exception>
 
 PathPlannerNode::PathPlannerNode() : Node("path_planner") {
   RCLCPP_INFO(this->get_logger(), "Starting Path Planner Node");
@@ -33,7 +34,7 @@ PathPlannerNode::PathPlannerNode() : Node("path_planner") {
 }
 
 void PathPlannerNode::trigger_replanning() {
-  RCLCPP_INFO(this->get_logger(), "Replanning path");
+  RCLCPP_INFO(this->get_logger(), "Replanning path from (%f, %f) to (%f, %f)", current_pose_->pose.position.x, current_pose_->pose.position.y, current_goal_->pose.position.x, current_goal_->pose.position.y);
 
   // If any of the current state is not set, do not replan
   if (!current_goal_ || !current_map_ || !current_pose_) {
@@ -42,8 +43,15 @@ void PathPlannerNode::trigger_replanning() {
     return;
   }
 
-  nav_msgs::msg::Path path =
+  nav_msgs::msg::Path path;
+
+  try {
+    path = 
       (*path_planner)(current_goal_, current_map_, current_pose_);
+  } catch (std::exception &e) {
+    RCLCPP_WARN(this->get_logger(), "Failed to replan path: %s", e.what());
+    return;
+  }
 
   if (path.poses.empty()) {
     RCLCPP_WARN(this->get_logger(), "Failed to find a path");

@@ -82,7 +82,8 @@ AStarPathPlanner::exec_astar(Eigen::Vector2i start_cell,
     auto valid_neighbors = get_valid_neighbors(curr->cell);
 
     for (auto &neighbor : valid_neighbors) {
-      auto delta = neighbor - curr->cell;
+      Eigen::Vector2d delta = (neighbor - curr->cell).cast<double>();
+
 
       // account for diagonal moves
       double g = curr->g + (delta.norm() > 1 ? 1.5 : 1);

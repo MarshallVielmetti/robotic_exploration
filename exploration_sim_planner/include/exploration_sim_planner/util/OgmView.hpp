@@ -70,7 +70,9 @@ public:
    * @return The grid cell coordinates corresponding to the world coordinates.
    */
   Eigen::Vector2i world_to_cell(const Eigen::Vector2d &point) {
-    assert(point.x() >= origin_.x() && point.y() >= origin_.y());
+    if (point.x() < origin_.x() || point.y() < origin_.y()) {
+      throw std::out_of_range("Point outside the occupancy grid");
+    }
 
     // floors the value to the nearest integer
     const Eigen::Vector2i cell = ((point - origin_) / resolution_).cast<int>();

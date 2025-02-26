@@ -6,7 +6,7 @@
     "/opt/ros/jazzy/lib/python3.12/site-packages"
   ],
   "clangd.arguments": [
-    "--header-insertion=always",
+    // "--header-insertion=always",
   ],
   "editor.formatOnSave": true,
 }
