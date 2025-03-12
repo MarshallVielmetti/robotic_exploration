@@ -1,7 +1,6 @@
 
-#include "nav_msgs/msg/occupancy_grid.hpp"
-
 #include "Eigen/Dense"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 /**
  * @class OgmView
@@ -12,16 +11,17 @@
  * world coordinates to grid cell coordinates.
  */
 class OgmView {
-public:
+ public:
   /**
    * @brief Constructor for OgmView.
    *
    * @param ogm A shared pointer to the occupancy grid map.
    */
   OgmView(nav_msgs::msg::OccupancyGrid::SharedPtr ogm)
-      : ogm_(ogm), resolution_(ogm->info.resolution), width_(ogm->info.width),
+      : ogm_(ogm),
+        resolution_(ogm->info.resolution),
+        width_(ogm->info.width),
         height_(ogm->info.height) {
-
     origin_ << ogm->info.origin.position.x, ogm->info.origin.position.y;
   }
 
@@ -33,7 +33,7 @@ public:
    * @return The occupancy value at the specified cell.
    * @throws std::out_of_range if the cell coordinates are out of range.
    */
-  int8_t get(const uint32_t x, const uint32_t y) {
+  int8_t get(const uint32_t x, const uint32_t y) const {
     if (x >= width_ || y >= height_) {
       throw std::out_of_range("Index out of range");
     }
@@ -80,10 +80,14 @@ public:
     return cell;
   }
 
+  int8_t operator()(const uint32_t x, const uint32_t y) const {
+    return get(x, y);
+  }
+
   uint32_t width() const { return width_; }
   uint32_t height() const { return height_; }
 
-private:
+ private:
   nav_msgs::msg::OccupancyGrid::SharedPtr ogm_;
 
   double resolution_;
@@ -91,5 +95,5 @@ private:
   uint32_t height_;
 
   Eigen::Vector2d
-      origin_; // point represented by the (0,0) cell in the occupancy grid
+      origin_;  // point represented by the (0,0) cell in the occupancy grid
 };

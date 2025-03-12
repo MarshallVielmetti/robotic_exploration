@@ -5,17 +5,17 @@
 // Converts the single integrator control to a double integrator differential
 // drive control
 class DiffDriveController : public rclcpp::Node {
-public:
+ public:
   DiffDriveController();
 
-private:
+ private:
   void control_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
   void publish_velocity_setpoint();
 
-private:
-  Eigen::Vector2d velocity_setpoint_; // linear and angular velocity setpoint
+ private:
+  Eigen::Vector2d velocity_setpoint_;  // linear and angular velocity setpoint
   Eigen::Vector2d
-      control_value_; // linear and angular acceleration control value
+      control_value_;  // linear and angular acceleration control value
 
   // ROS2 publishers and subscribers
   std::shared_ptr<rclcpp::Subscription<geometry_msgs::msg::Twist>>
