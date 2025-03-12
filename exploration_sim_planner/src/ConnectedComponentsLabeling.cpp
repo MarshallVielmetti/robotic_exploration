@@ -6,6 +6,9 @@
 
 #include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
 
+#include <cstdint>
+#include <iterator>
+#include <map>
 #include <unordered_map>
 
 #include "Eigen/src/Core/Matrix.h"
@@ -15,6 +18,16 @@
 #define OGM_OCCUPIED 1
 #define OGM_FREE 0
 #define OGM_UNKNOWN -1
+
+/**
+ * Definition of terms used
+ * - Cell: A single grid cell in the occupancy grid map
+ * - Sector: A square region of the map that is sector_size x sector_size cells
+ * - Zone: A connected component of safe-free or unknown cells
+ * - Center: The center of a zone, used for path planning
+ * - Edge: A connection between two centers, used for path planning, weighted
+ * proportionally to the A* distance between the centers
+ */
 
 ConnectedComponentsLabeling::ConnectedComponentsLabeling(uint32_t sector_size,
                                                          uint32_t safe_distance)
@@ -193,14 +206,54 @@ std::vector<Eigen::Vector2d> ConnectedComponentsLabeling::find_centers(
     centers.push_back(center);
   }
 
+  // TODO - verify the center is located inside the zone, and rectify if not
+
   return centers;
 }
 
+/**
+ * @brief Compute the incremental connectivity graph
+ *
+ * Implements Algorithm 1 from the FALCON paper
+ */
 ConnectivityGraph
 ConnectedComponentsLabeling::compute_incremental_connectivity_graph(
     const Eigen::Matrix2i& cell_labels,
     const std::vector<Eigen::Vector2d>& centers) {
   ConnectivityGraph graph;
 
-  return graph;
+  graph.nodes = centers;
+
+  // compute the cell that each center (double) is in by flooring the values
+  std::vector<Eigen::Vector2i> center_cells;
+
+  std::transform(
+      centers.begin(), centers.end(), std::back_inserter(center_cells),
+      [](const Eigen::Vector2d& center) {
+        return Eigen::Vector2i(std::floor(center.x()), std::floor(center.y()));
+      });
+
+  // loop through every pair of centers
+  for (uint32_t i = 0; i < centers.size(); i++) {
+    for (uint32_t j = i + 1; j < centers.size(); j++) {
+      // the two centers can only be connected if they are in the same or
+      // adjacent sectors (don't include diagonals)
+      int32_t x_diff =
+          std::abs(center_cells[i].x() / static_cast<int32_t>(sector_size_) -
+                   center_cells[j].x() / static_cast<int32_t>(sector_size_));
+
+      int32_t y_diff =
+          std::abs(center_cells[i].y() / static_cast<int32_t>(sector_size_) -
+                   center_cells[j].y() / static_cast<int32_t>(sector_size_));
+
+      // if the centers are not in the same or adjacent sectors, skip
+      if (x_diff > 1 || y_diff > 1 || x_diff + y_diff > 1) {
+        continue;
+      }
+
+      // check if the two centers are connected by a path
+    }
+
+    return graph;
+  }
 }
