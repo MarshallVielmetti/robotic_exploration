@@ -7,6 +7,8 @@
   <maintainer email="mvielmet@umich.edu">Marshall Vielmetti</maintainer>
   <license>MIT</license>
 
+  <depend>exploration_sim_msgs</depend>
+
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>

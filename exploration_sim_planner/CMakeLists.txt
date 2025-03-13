@@ -20,6 +20,9 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
+# custom packages
+find_package(exploration_sim_msgs REQUIRED)
+
 # set(Torch_DIR "/home/marshallvielmetti/Documents/torch/libtorch/share/cmake/Torch")
 # find_package(Torch REQUIRED)
 # include_directories(${TORCH_INCLUDE_DIRS})
@@ -33,6 +36,11 @@ add_executable(pose_listener src/PoseTransformListenerNode.cpp)
 ament_target_dependencies(pose_listener rclcpp geometry_msgs tf2 tf2_ros Eigen3)
 target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
+
+add_executable(coverage_path_planner src/CoveragePathPlannerNode.cpp src/ConnectedComponentsLabeling.cpp)
+ament_target_dependencies(coverage_path_planner rclcpp nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
+target_include_directories(coverage_path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
 # add_executable(trajectory_tracker src/TrajectoryTrackerNode.cpp src/trajectory_tracker/MPPITrajectoryTracker.cpp)
 # ament_target_dependencies(trajectory_tracker rclcpp nav_msgs geometry_msgs Eigen3 Torch)
 # target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/include)
@@ -42,6 +50,7 @@ target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
 install(TARGETS 
   path_planner
   pose_listener
+  coverage_path_planner
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -89,10 +89,13 @@ bool ConnectedComponentsLabeling::is_safe_free(const OgmView& ogm, uint32_t x,
   return true;
 }
 
-Eigen::Matrix2i ConnectedComponentsLabeling::compute_zones(
+Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>
+ConnectedComponentsLabeling::compute_zones(
     const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
         cell_labels) {
-  Eigen::Matrix2i zones(cell_labels.rows(), cell_labels.cols());
+  // Initialize matrix to store the zone information
+  Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic> zones(
+      cell_labels.rows(), cell_labels.cols());
   zones.setZero();
 
   // id of the next zone to be assigned
@@ -109,7 +112,8 @@ Eigen::Matrix2i ConnectedComponentsLabeling::compute_zones(
 }
 
 void ConnectedComponentsLabeling::compute_sector_zones(
-    const Eigen::Matrix2i& cell_labels, Eigen::Matrix2i& zones, uint32_t x0,
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
+    Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones, uint32_t x0,
     uint32_t y0, uint32_t& zone_id) {
   // loop through every cell in the sector
   // for each cell, check the type of the cell to the left and below
@@ -171,7 +175,7 @@ void ConnectedComponentsLabeling::compute_sector_zones(
 
 std::vector<Eigen::Vector2d> ConnectedComponentsLabeling::find_centers(
     const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
-    const Eigen::Matrix2i& zones) {
+    const Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones) {
   // map from zone id to the working value for center
   std::unordered_map<uint32_t, Eigen::Vector2d> zone_centers;
 
@@ -218,7 +222,7 @@ ConnectivityGraph
 ConnectedComponentsLabeling::compute_incremental_connectivity_graph(
     const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
     const std::vector<Eigen::Vector2d>& centers) {
-  ConnectivityGraph graph;
+  ConnectivityGraph graph(centers);
 
   graph.nodes = centers;
 
@@ -299,7 +303,7 @@ ConnectedComponentsLabeling::compute_incremental_connectivity_graph(
    * Remove any isolated subcomponents before returning
    */
 
-  filter_isolated_subcomponents(graph);
+  filter_isolated_subcomponents(graph, cell_labels);
 
   return graph;
 }
@@ -316,17 +320,17 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
   // exploration process -- restricted astar
   std::function<bool(const Eigen::Vector2i&)> is_valid_cell =
       [&](const Eigen::Vector2i& cell) {
+        // check that the cell is in the map
+        if (cell.x() < 0 || cell.x() >= cell_labels.cols() || cell.y() < 0 ||
+            cell.y() >= cell_labels.rows()) {
+          return false;
+        }
+
         // check that the cell is the same type as the start OR goal
         if (cell_labels(cell.y(), cell.x()) !=
                 cell_labels(start.y(), start.x()) &&
             cell_labels(cell.y(), cell.x()) !=
                 cell_labels(goal.y(), goal.x())) {
-          return false;
-        }
-
-        // check that the cell is in the map
-        if (cell.x() < 0 || cell.x() >= cell_labels.cols() || cell.y() < 0 ||
-            cell.y() >= cell_labels.rows()) {
           return false;
         }
 
@@ -385,8 +389,6 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
         curr->cell, is_valid_cell);
 
     for (auto& neighbor : valid_neighbors) {
-      Eigen::Vector2d delta = (neighbor - curr->cell).cast<double>();
-
       double g = curr->g + 1;
 
       // check if the neighbor cell is already in the closed set
@@ -428,5 +430,96 @@ std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::get_valid_neighbors(
   return neighbors;
 }
 
-void ConnectedComponentsLabeling::remove_isolated_subcomponents(
-    ConnectivityGraph& graph) {}
+void ConnectedComponentsLabeling::filter_isolated_subcomponents(
+    ConnectivityGraph& graph,
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
+        cell_labels) {
+  // Going to re-use the UnionFind class to determine the number of connected
+  // components in the graph. Any connected components which contain only
+  // unknown nodes will be eliminated
+
+  UnionFind uf(graph.nodes.size());
+  for (uint32_t i = 0; i < graph.nodes.size(); i++) {
+    for (uint32_t j = i + 1; j < graph.nodes.size(); j++) {
+      if (graph.edges(i, j).type != EdgeType::INVALID) {
+        uf.unite(i, j);
+      }
+    }
+  }
+
+  // if there is only one connected component, then there is nothing to do
+  if (uf.get_num_sets() == 1) {
+    return;
+  }
+
+  // Build a map from representative to the list of node indices in that
+  // component.
+  std::unordered_map<uint32_t, std::vector<uint32_t>> comp_nodes;
+  for (uint32_t i = 0; i < graph.nodes.size(); i++) {
+    uint32_t rep = uf.find(i);
+    comp_nodes[rep].push_back(i);
+  }
+
+  // Identify component to keep--the only component that contains a known node.
+  uint32_t keep_rep = 0;
+  bool found = false;
+
+  for (const auto& [rep, nodes] : comp_nodes) {
+    for (uint32_t idx : nodes) {
+      // Convert the center cell to coordinates
+      Eigen::Vector2i cell(static_cast<int>(std::floor(graph.nodes[idx].x())),
+                           static_cast<int>(std::floor(graph.nodes[idx].y())));
+
+      if (cell_labels(cell.y(), cell.x()) != CellLabel::UNKNOWN) {
+        keep_rep = rep;
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (!found) {
+    return;
+  }
+
+  // build a new graph that includesa only nodes in the component to keep
+  std::unordered_map<uint32_t, uint32_t> index_map;
+  std::vector<Eigen::Vector2d> new_centers;
+
+  // add valid nodes to the new graph
+  for (uint32_t i = 0; i < graph.nodes.size(); i++) {
+    if (uf.find(i) == keep_rep) {
+      index_map[i] = new_centers.size();
+      new_centers.push_back(graph.nodes[i]);
+    }
+  }
+
+  ConnectivityGraph new_graph(new_centers);
+
+  // add valid edges to new graph
+  for (uint32_t i = 0; i < graph.nodes.size(); i++) {
+    // only consider nodes in the component to keep
+    if (uf.find(i) != keep_rep) {
+      continue;
+    }
+
+    for (uint32_t j = i + 1; j < graph.nodes.size(); j++) {
+      // only consider nodes in the component to keep
+      if (uf.find(j) != keep_rep) {
+        continue;
+      }
+
+      // if the edge exists and is between two nodes that are kept, copy it to
+      // new graph using the translation map
+      if (graph.edges(i, j).type != EdgeType::INVALID) {
+        uint32_t new_i = index_map[i];
+        uint32_t new_j = index_map[j];
+        new_graph.add_edge(new_i, new_j, graph.edges(i, j).type,
+                           graph.edges(i, j).cost);
+      }
+    }
+  }
+
+  // replace the original graph with the modified one
+  graph = std::move(new_graph);
+}

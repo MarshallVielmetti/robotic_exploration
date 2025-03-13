@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Eigen/Dense"
+#include "Eigen/src/Core/Matrix.h"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 
 /**
@@ -62,6 +63,10 @@ class OgmView {
    */
   Eigen::Vector2d cell_to_world(const Eigen::Vector2i &cell) {
     return origin_ + cell.cast<double>() * resolution_;
+  }
+
+  Eigen::Vector2d cell_to_world(const Eigen::Vector2d &cell) {
+    return origin_ + cell * resolution_;
   }
 
   /**

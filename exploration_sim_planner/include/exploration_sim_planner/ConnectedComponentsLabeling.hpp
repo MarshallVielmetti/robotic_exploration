@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "Eigen/src/Core/Matrix.h"
+#include "Eigen/src/Core/util/Constants.h"
 #include "exploration_sim_planner/util/OgmView.hpp"
 
 enum class CellLabel {
@@ -41,7 +42,11 @@ struct Edge {
 };
 
 struct ConnectivityGraph {
-  ConnectivityGraph() = default;  // TODO may need a ctor
+  ConnectivityGraph(std::vector<Eigen::Vector2d> the_nodes) : nodes(the_nodes) {
+    edges = Eigen::Matrix<Edge, Eigen::Dynamic, Eigen::Dynamic>(nodes.size(),
+                                                                nodes.size());
+    edges.setConstant(Edge{EdgeType::INVALID, 0.0});
+  }
 
   std::vector<Eigen::Vector2d> nodes;  // centers of zones
 
@@ -135,7 +140,7 @@ class ConnectedComponentsLabeling {
    * computed zone data. The specific interpretation of the zone data is
    * determined by the underlying connected components labeling algorithm.
    */
-  Eigen::Matrix2i compute_zones(
+  Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic> compute_zones(
       const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
           cell_labels);
 
@@ -158,7 +163,7 @@ class ConnectedComponentsLabeling {
   std::vector<Eigen::Vector2d> find_centers(
       const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
           cell_labels,
-      const Eigen::Matrix2i& zones);
+      const Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones);
 
   /**
    * @brief Computes the incremental connectivity graph.
@@ -204,9 +209,11 @@ class ConnectedComponentsLabeling {
    * @param zone_id A reference to an unsigned integer that holds the current
    * zone identifier. It is incremented when new zones are assigned.
    */
-  void compute_sector_zones(const Eigen::Matrix2i& cell_labels,
-                            Eigen::Matrix2i& zones, uint32_t x, uint32_t y,
-                            uint32_t& zone_id);
+  void compute_sector_zones(
+      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
+          cell_labels,
+      Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones,
+      uint32_t x, uint32_t y, uint32_t& zone_id);
 
   /**
    * @brief Computes a path cost using A* with restricted exploration.
@@ -245,7 +252,10 @@ class ConnectedComponentsLabeling {
    *
    * @param graph The connectivity graph to be processed.
    */
-  void filter_isolated_subcomponents(ConnectivityGraph& graph);
+  void filter_isolated_subcomponents(
+      ConnectivityGraph& graph,
+      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
+          cell_labels);
 
  private:
   // The size of the sectors in the map
