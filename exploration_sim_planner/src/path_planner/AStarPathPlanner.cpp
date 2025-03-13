@@ -1,6 +1,4 @@
 #include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
-#include "Eigen/src/Core/Matrix.h"
-#include "geometry_msgs/msg/pose_stamped.hpp"
 
 #include <cstddef>
 #include <functional>
@@ -9,21 +7,13 @@
 #include <rclcpp/clock.hpp>
 #include <unordered_map>
 
-namespace std {
-template <> struct hash<Eigen::Vector2i> {
-  std::size_t operator()(const Eigen::Vector2i &v) const {
-    std::size_t h1 = std::hash<int>()(v.x());
-    std::size_t h2 = std::hash<int>()(v.y());
-    return h1 ^ (h2 << 1);
-  }
-};
-} // namespace std
+#include "Eigen/src/Core/Matrix.h"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 nav_msgs::msg::Path AStarPathPlanner::operator()(
     const geometry_msgs::msg::PoseStamped::SharedPtr goal,
     const nav_msgs::msg::OccupancyGrid::SharedPtr map,
     const geometry_msgs::msg::PoseStamped::SharedPtr pose) {
-
   // Create an ogm view object to interact with the occupancy grid map
   ogm_ = std::make_shared<OgmView>(map);
 
@@ -42,10 +32,8 @@ nav_msgs::msg::Path AStarPathPlanner::operator()(
   return path;
 }
 
-std::vector<Eigen::Vector2i>
-AStarPathPlanner::exec_astar(Eigen::Vector2i start_cell,
-                             Eigen::Vector2i goal_cell) {
-
+std::vector<Eigen::Vector2i> AStarPathPlanner::exec_astar(
+    Eigen::Vector2i start_cell, Eigen::Vector2i goal_cell) {
   auto comparator = PathPlannerUtil::PqNodeCompare(goal_cell);
 
   std::priority_queue<std::shared_ptr<PathPlannerUtil::PqNode>,
@@ -84,7 +72,6 @@ AStarPathPlanner::exec_astar(Eigen::Vector2i start_cell,
     for (auto &neighbor : valid_neighbors) {
       Eigen::Vector2d delta = (neighbor - curr->cell).cast<double>();
 
-
       // account for diagonal moves
       double g = curr->g + (delta.norm() > 1 ? 1.5 : 1);
 
@@ -118,13 +105,12 @@ std::vector<Eigen::Vector2i> AStarPathPlanner::reconstruct_cell_path(
   return cell_path;
 }
 
-std::vector<Eigen::Vector2i>
-AStarPathPlanner::get_valid_neighbors(const Eigen::Vector2i &cell) {
+std::vector<Eigen::Vector2i> AStarPathPlanner::get_valid_neighbors(
+    const Eigen::Vector2i &cell) {
   std::vector<Eigen::Vector2i> neighbors;
 
   for (int dx = -1; dx <= 1; ++dx) {
     for (int dy = -1; dy <= 1; ++dy) {
-
       if (dx == 0 && dy == 0) {
         continue;
       }

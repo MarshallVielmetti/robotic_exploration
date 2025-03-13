@@ -1,3 +1,4 @@
+#pragma once
 
 #include "Eigen/Dense"
 #include "nav_msgs/msg/occupancy_grid.hpp"

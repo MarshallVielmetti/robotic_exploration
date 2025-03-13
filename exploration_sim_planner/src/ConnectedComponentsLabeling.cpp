@@ -8,11 +8,12 @@
 
 #include <cstdint>
 #include <iterator>
-#include <map>
+#include <queue>
 #include <unordered_map>
 
 #include "Eigen/src/Core/Matrix.h"
 #include "Eigen/src/Core/util/Constants.h"
+#include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
 #include "exploration_sim_planner/util/UnionFind.hpp"
 
 #define OGM_OCCUPIED 1
@@ -84,6 +85,8 @@ bool ConnectedComponentsLabeling::is_safe_free(const OgmView& ogm, uint32_t x,
       }
     }
   }
+
+  return true;
 }
 
 Eigen::Matrix2i ConnectedComponentsLabeling::compute_zones(
@@ -211,14 +214,9 @@ std::vector<Eigen::Vector2d> ConnectedComponentsLabeling::find_centers(
   return centers;
 }
 
-/**
- * @brief Compute the incremental connectivity graph
- *
- * Implements Algorithm 1 from the FALCON paper
- */
 ConnectivityGraph
 ConnectedComponentsLabeling::compute_incremental_connectivity_graph(
-    const Eigen::Matrix2i& cell_labels,
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
     const std::vector<Eigen::Vector2d>& centers) {
   ConnectivityGraph graph;
 
@@ -251,9 +249,184 @@ ConnectedComponentsLabeling::compute_incremental_connectivity_graph(
         continue;
       }
 
-      // check if the two centers are connected by a path
+      // Get cell labels
+      CellLabel i_label = cell_labels(center_cells[i].y(), center_cells[i].x());
+      CellLabel j_label = cell_labels(center_cells[j].y(), center_cells[j].x());
+
+      /*
+       * Three cases: both safe-free (free edges)
+       * both unknown (unknown edges)
+       * one of each, and in the same sector (portal edges)
+       */
+
+      if ((i_label == CellLabel::SAFE_FREE &&
+           j_label == CellLabel::SAFE_FREE) ||
+          (i_label == CellLabel::UNKNOWN && j_label == CellLabel::UNKNOWN)) {
+        // check if the two centers are connected by a path
+        auto path_cost =
+            restricted_astar(cell_labels, center_cells[i], center_cells[j]);
+
+        // no valid path found
+        if (!path_cost.has_value()) {
+          continue;
+        }
+
+        EdgeType type = (i_label == CellLabel::SAFE_FREE) ? EdgeType::FREE
+                                                          : EdgeType::UNKNOWN;
+
+        graph.add_edge(i, j, type, path_cost.value());
+      }
+
+      // if they are different, specifically one is free and one is safe (else
+      // case) then only check for path if they are in the same sector
+      // this edge would be a "portal path"
+      else if (x_diff == 0 && y_diff == 0) {
+        // check if the two centers are connected by a path
+        auto path_cost =
+            restricted_astar(cell_labels, center_cells[i], center_cells[j]);
+
+        if (!path_cost.has_value()) {
+          continue;
+        }
+
+        // add the edge
+        graph.add_edge(i, j, EdgeType::PORTAL, path_cost.value());
+      }  // end if
+    }  // end inner for
+  }  // end outer for
+
+  /*
+   * Remove any isolated subcomponents before returning
+   */
+
+  filter_isolated_subcomponents(graph);
+
+  return graph;
+}
+
+std::optional<double> ConnectedComponentsLabeling::restricted_astar(
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
+    const Eigen::Vector2i& start, const Eigen::Vector2i& goal) {
+  // check if the start and goal are the same
+  if (start == goal) {
+    return 0.0;
+  }
+
+  // helper function to check if a cell is valid to be considered in the
+  // exploration process -- restricted astar
+  std::function<bool(const Eigen::Vector2i&)> is_valid_cell =
+      [&](const Eigen::Vector2i& cell) {
+        // check that the cell is the same type as the start OR goal
+        if (cell_labels(cell.y(), cell.x()) !=
+                cell_labels(start.y(), start.x()) &&
+            cell_labels(cell.y(), cell.x()) !=
+                cell_labels(goal.y(), goal.x())) {
+          return false;
+        }
+
+        // check that the cell is in the map
+        if (cell.x() < 0 || cell.x() >= cell_labels.cols() || cell.y() < 0 ||
+            cell.y() >= cell_labels.rows()) {
+          return false;
+        }
+
+        // check that the cell is in the same sector as the start or goal
+        int start_sector_x = start.x() / sector_size_;
+        int start_sector_y = start.y() / sector_size_;
+
+        int goal_sector_x = goal.x() / sector_size_;
+        int goal_sector_y = goal.y() / sector_size_;
+
+        int cell_sector_x = cell.x() / sector_size_;
+        int cell_sector_y = cell.y() / sector_size_;
+
+        // verify the cell is in the same sector as the start or goal cells
+        if ((start_sector_x != cell_sector_x ||
+             start_sector_y != cell_sector_y) &&
+            (goal_sector_x != cell_sector_x ||
+             goal_sector_y != cell_sector_y)) {
+          return false;
+        }
+
+        return true;
+      };
+
+  PathPlannerUtil::PqNodeCompare comparator(goal);
+
+  std::priority_queue<std::shared_ptr<PathPlannerUtil::PqNode>,
+                      std::vector<std::shared_ptr<PathPlannerUtil::PqNode>>,
+                      PathPlannerUtil::PqNodeCompare>
+      open_set(comparator);
+
+  std::unordered_map<Eigen::Vector2i, std::shared_ptr<PathPlannerUtil::PqNode>>
+      closed_set;
+
+  open_set.push(std::make_shared<PathPlannerUtil::PqNode>(start, 0, nullptr));
+
+  while (!open_set.empty()) {
+    auto curr = open_set.top();
+    open_set.pop();
+
+    // check if goal reached, if so return cost
+    if (curr->cell == goal) {
+      return curr->g;
     }
 
-    return graph;
+    // if this cell has already been visited with a lower cost, then just
+    // continue
+    if (closed_set.contains(curr->cell) &&
+        closed_set[curr->cell]->g <= curr->g) {
+      continue;
+    }
+
+    closed_set[curr->cell] = curr;
+
+    auto valid_neighbors = ConnectedComponentsLabeling::get_valid_neighbors(
+        curr->cell, is_valid_cell);
+
+    for (auto& neighbor : valid_neighbors) {
+      Eigen::Vector2d delta = (neighbor - curr->cell).cast<double>();
+
+      double g = curr->g + 1;
+
+      // check if the neighbor cell is already in the closed set
+      if (closed_set.contains(neighbor) && closed_set[neighbor]->g <= g) {
+        continue;
+      }
+
+      // add to the open set
+      open_set.push(
+          std::make_shared<PathPlannerUtil::PqNode>(neighbor, g, curr));
+    }
   }
+
+  return std::nullopt;
+};
+
+std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::get_valid_neighbors(
+    const Eigen::Vector2i& cell,
+    std::function<bool(const Eigen::Vector2i&)>& is_valid_cell) {
+  // vector to store return values
+  std::vector<Eigen::Vector2i> neighbors;
+
+  for (int dx = -1; dx <= 1; ++dx) {
+    for (int dy = -1; dy <= 1; ++dy) {
+      // only consider 4 direct non-diagonal neighboring cells
+      if ((dx == 0 && dy == 0) || (dx != 0 && dy != 0)) {
+        continue;
+      }
+
+      // check if neighboring cell is valid
+      if (!is_valid_cell(cell + Eigen::Vector2i(dx, dy))) {
+        continue;
+      }
+
+      neighbors.push_back(cell + Eigen::Vector2i(dx, dy));
+    }
+  }
+
+  return neighbors;
 }
+
+void ConnectedComponentsLabeling::remove_isolated_subcomponents(
+    ConnectivityGraph& graph) {}
