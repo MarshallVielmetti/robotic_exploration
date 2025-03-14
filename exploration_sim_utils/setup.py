@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools'],
+    # data_files=[]
     zip_safe=True,
     maintainer='Marshall Vielmetti',
     maintainer_email='mvielmet@umich.edu',
@@ -22,6 +23,7 @@ setup(
         'console_scripts': [
             'path_grapher = exploration_sim_utils.PathGrapher:main',
             'fit_splines = exploration_sim_utils.FitSplines:main',
+            'connectivity_graph_plotter = exploration_sim_utils.ConnectivityGraphPlotter:main',
         ],
     },
 )

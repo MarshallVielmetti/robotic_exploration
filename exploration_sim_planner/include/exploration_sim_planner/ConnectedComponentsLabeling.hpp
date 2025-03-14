@@ -34,7 +34,7 @@ enum class CellLabel {
   UNSAFE_FREE = 3
 };
 
-enum class EdgeType { INVALID, FREE, UNKNOWN, PORTAL };
+enum class EdgeType { INVALID = 0, FREE = 1, UNKNOWN = 2, PORTAL = 3 };
 
 struct Edge {
   EdgeType type;

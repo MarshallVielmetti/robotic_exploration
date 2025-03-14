@@ -8,6 +8,7 @@
 
 #include "exploration_sim_msgs/msg/connectivity_graph.hpp"
 #include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 class CoveragePathPlannerNode : public rclcpp::Node {
  public:
@@ -22,4 +23,7 @@ class CoveragePathPlannerNode : public rclcpp::Node {
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Publisher<exploration_sim_msgs::msg::ConnectivityGraph>::SharedPtr
       graph_pub_;
+
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr labels_pub_;
+  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr zones_pub_;
 };

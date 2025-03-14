@@ -10,12 +10,19 @@
 
 #include "exploration_sim_planner/CoveragePathPlannerNode.hpp"
 
+#include <rclcpp/logging.hpp>
+
 #include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
 #include "exploration_sim_planner/util/MsgUtil.hpp"
 
+#define DEBUG_MODE 1
+
 CoveragePathPlannerNode::CoveragePathPlannerNode()
     : Node("coverage_path_planner"), connected_components_util_(10, 1) {
-  RCLCPP_INFO(get_logger(), "Coverage Path Planner Node has started.");
+  RCLCPP_INFO(get_logger(),
+              "Coverage Path Planner Node has started, configured with sector "
+              "size %d and safe distance %d.",
+              10, 1);
 
   // Subscribe to the map topic
   map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
@@ -26,6 +33,11 @@ CoveragePathPlannerNode::CoveragePathPlannerNode()
   // Create a publisher for the connectivity graph
   graph_pub_ = create_publisher<exploration_sim_msgs::msg::ConnectivityGraph>(
       "connectivity_graph", 10);
+
+  labels_pub_ =
+      create_publisher<nav_msgs::msg::OccupancyGrid>("cell_labels", 10);
+
+  zones_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("zones", 10);
 }
 
 void CoveragePathPlannerNode::map_callback(
@@ -35,11 +47,28 @@ void CoveragePathPlannerNode::map_callback(
   // Create an OgmView object to allow interacting with the OGM
   auto ogm_view = std::make_shared<OgmView>(msg);
 
+  RCLCPP_DEBUG(get_logger(), "Received OGM with dimensions: %dx%d",
+               ogm_view->width(), ogm_view->height());
+
   // Label the cells in the map
   auto cell_labels = connected_components_util_.label_cells(*ogm_view);
 
+  // publish the cell labels if anyone is subscribed to the topic
+  if (labels_pub_->get_subscription_count() > 0 || DEBUG_MODE) {
+    RCLCPP_DEBUG(get_logger(), "Publishing cell labels.");
+    auto labels_msg = msg_util::matrix_to_occupancy_grid(cell_labels, msg);
+    labels_pub_->publish(labels_msg);
+  }
+
   // Compute zones based on the cell labels
   auto zones = connected_components_util_.compute_zones(cell_labels);
+
+  // publish the zones if anyone is subscribed to the topic
+  if (zones_pub_->get_subscription_count() > 0 || DEBUG_MODE) {
+    RCLCPP_DEBUG(get_logger(), "Publishing cell zones.");
+    auto zones_msg = msg_util::matrix_to_occupancy_grid(zones, msg);
+    zones_pub_->publish(zones_msg);
+  }
 
   // Find the centers of the zones
   auto centers = connected_components_util_.find_centers(cell_labels, zones);

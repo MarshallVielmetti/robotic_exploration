@@ -39,7 +39,9 @@ class TrajectoryTracker(Node):
     if self.path is None or self.current_pose is None:
       return
 
-    # Find the closest point on the path to the current pose
+    # Uses MPC to find the optimal control
+
+    
 
 
   

@@ -12,6 +12,7 @@
 #include "exploration_sim_msgs/msg/edge.hpp"
 #include "exploration_sim_msgs/msg/point2d.hpp"
 #include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 
 namespace msg_util {
 
@@ -43,12 +44,61 @@ inline exploration_sim_msgs::msg::ConnectivityGraph graph_to_msg(
 
   for (uint32_t i = 0; i < graph.edges.rows(); i++) {
     for (uint32_t j = 0; j < graph.edges.cols(); j++) {
-      if (graph.edges(i, j).type != EdgeType::INVALID) {
-        msg.edges[i * graph.edges.cols() + j] = edge_to_msg(graph.edges(i, j));
-      }
+      msg.edges[i * graph.edges.cols() + j] = edge_to_msg(graph.edges(i, j));
+      // if (graph.edges(i, j).type != EdgeType::INVALID) {
+      //   msg.edges[i * graph.edges.cols() + j] = edge_to_msg(graph.edges(i,
+      //   j));
+      // }
     }
   }
 
   return msg;
 }
+
+inline nav_msgs::msg::OccupancyGrid matrix_to_occupancy_grid(
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& matrix,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr& ogm_reference_frame) {
+  nav_msgs::msg::OccupancyGrid msg;
+
+  msg.header = ogm_reference_frame->header;
+
+  msg.info.width = matrix.cols();
+  msg.info.height = matrix.rows();
+  msg.info.origin = ogm_reference_frame->info.origin;
+  msg.info.resolution = ogm_reference_frame->info.resolution;
+
+  msg.data.resize(msg.info.width * msg.info.height);
+
+  for (uint32_t y = 0; y < matrix.rows(); y++) {
+    for (uint32_t x = 0; x < matrix.cols(); x++) {
+      msg.data[y * matrix.cols() + x] = static_cast<int8_t>(matrix(y, x));
+    }
+  }
+
+  return msg;
+}
+
+inline nav_msgs::msg::OccupancyGrid matrix_to_occupancy_grid(
+    const Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& matrix,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr& ogm_reference_frame) {
+  nav_msgs::msg::OccupancyGrid msg;
+
+  msg.header = ogm_reference_frame->header;
+
+  msg.info.width = matrix.cols();
+  msg.info.height = matrix.rows();
+  msg.info.origin = ogm_reference_frame->info.origin;
+  msg.info.resolution = ogm_reference_frame->info.resolution;
+
+  msg.data.resize(msg.info.width * msg.info.height);
+
+  for (uint32_t y = 0; y < matrix.rows(); y++) {
+    for (uint32_t x = 0; x < matrix.cols(); x++) {
+      msg.data[y * matrix.cols() + x] = static_cast<int8_t>(matrix(y, x));
+    }
+  }
+
+  return msg;
+}
+
 }  // namespace msg_util
