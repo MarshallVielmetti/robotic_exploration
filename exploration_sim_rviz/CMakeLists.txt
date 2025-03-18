@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rviz_common REQUIRED)
+find_package(rviz_rendering REQUIRED)
 find_package(exploration_sim_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.

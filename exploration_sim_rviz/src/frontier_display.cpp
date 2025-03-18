@@ -3,18 +3,122 @@
  * @brief Implementation of the FrontierDisplay class
  */
 
+#include <OgreColourValue.h>
 #include <exploration_sim_rviz/frontier_display.hpp>
 #include <rviz_common/logging.hpp>
 
-namespace exploration_sim_rviz
-{
-  void FrontierDisplay::processMessage(const exploration_sim_msgs::msg::FrontierClusters::ConstSharedPtr msg)
-  {
-    // Display the number of frontiers
-    RVIZ_COMMON_LOG_INFO_STREAM("Received " << msg->clusters.size() << " frontiers");
+#include <OgreSceneManager.h>
+#include <OgreSceneNode.h>
+
+namespace exploration_sim_rviz {
+
+FrontierDisplay::~FrontierDisplay() { clearMarkers(); }
+
+void FrontierDisplay::onInitialize() { MFDClass::onInitialize(); }
+
+void FrontierDisplay::clearMarkers() {
+  for (auto &cluster : cluster_markers_) {
+    for (auto &marker : cluster) {
+      marker.reset();
+    }
+  }
+  cluster_markers_.clear();
+}
+
+void FrontierDisplay::reset() {
+  MFDClass::reset();
+  clearMarkers();
+}
+
+Ogre::ColourValue FrontierDisplay::getClusterColor(int cluster_index) {
+  float h = 0.0f; // red in HSL
+  float s = 1.0f; // Full saturation
+  float l = 0.5f; // medium lightness
+
+  // rotate hue using cluster idx and golden ratio
+  h += static_cast<float>(cluster_index) * 0.618033988749895f;
+  h = std::fmod(h, 1.0f);
+
+  // convert HSL to RGB
+  float c = (1.0f - std::abs(2.0f * l - 1.0f)) * s;
+  float x = c * (1.0f - std::abs(std::fmod(h * 6.0f, 2.0f) - 1.0f));
+  float m = l - c / 2.0f;
+
+  float r, g, b;
+  if (h < 1.0f / 6.0f) {
+    r = c;
+    g = x;
+    b = 0;
+  } else if (h < 2.0f / 6.0f) {
+    r = x;
+    g = c;
+    b = 0;
+  } else if (h < 3.0f / 6.0f) {
+    r = 0;
+    g = c;
+    b = x;
+  } else if (h < 4.0f / 6.0f) {
+    r = 0;
+    g = x;
+    b = c;
+  } else if (h < 5.0f / 6.0f) {
+    r = x;
+    g = 0;
+    b = c;
+  } else {
+    r = c;
+    g = 0;
+    b = x;
+  }
+
+  return Ogre::ColourValue(r + m, g + m, b + m, 1.0f);
+}
+
+void FrontierDisplay::processMessage(
+    const exploration_sim_msgs::msg::FrontierClusters::ConstSharedPtr msg) {
+  // Display the number of frontiers
+  RVIZ_COMMON_LOG_INFO_STREAM("Received " << msg->clusters.size()
+                                          << " frontiers");
+
+  // Clear all previous markers
+  clearMarkers();
+
+  if (!msg)
+    return;
+
+  float cell_size = msg->info.resolution;
+
+  auto origin = msg->info.origin.position;
+
+  // process each cluster
+  cluster_markers_.resize(msg->clusters.size());
+  for (size_t i = 0; i < msg->clusters.size(); ++i) {
+    const auto &cluster = msg->clusters[i];
+
+    // create a marker for each frontier in the cluster
+    cluster_markers_[i].resize(cluster.points.size());
+    for (size_t j = 0; j < cluster.points.size(); ++j) {
+      const auto &frontier = cluster.points[j];
+
+      // create a sphere marker
+      cluster_markers_[i][j] = std::make_unique<rviz_rendering::Shape>(
+          rviz_rendering::Shape::Sphere, context_->getSceneManager(),
+          scene_node_);
+
+      // set the position and scale of the marker
+      cluster_markers_[i][j]->setPosition(
+          Ogre::Vector3(frontier.x * cell_size + origin.x,
+                        frontier.y * cell_size + origin.y, 0.0f));
+      cluster_markers_[i][j]->setScale(Ogre::Vector3(cell_size / 2.0f));
+
+      // set the color of the marker
+      cluster_markers_[i][j]->setColor(getClusterColor(i));
+    }
   }
 }
 
+} // namespace exploration_sim_rviz
 
 #include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(exploration_sim_rviz::FrontierDisplay, rviz_common::Display)
+PLUGINLIB_EXPORT_CLASS(exploration_sim_rviz::FrontierDisplay,
+                       rviz_common::Display)

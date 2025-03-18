@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
-#include <list>
 #include <queue>
 #include <unordered_map>
 
@@ -136,6 +135,9 @@ ConnectedComponentsLabeling::cluster_frontiers(
       continue;
     }
 
+    // TODO REMOVE
+    // i++; continue;
+
     // if the cluster is too large, split it
     PCAResult pca = cluster_pca(clusters[i]);
 
@@ -231,8 +233,22 @@ ConnectedComponentsLabeling::split_cluster(
 
   std::vector<Eigen::Vector2i> cluster1, cluster2;
 
+  // need to find the median value along the first principle axis
+  Eigen::VectorXd principle_axis = pca.transformed_data.col(0);
+
+  std::sort(principle_axis.data(),
+            principle_axis.data() + principle_axis.size());
+
+  size_t n = principle_axis.size();
+  double median;
+  if (n % 2 == 0) {
+    median = (principle_axis(n / 2 - 1) + principle_axis(n / 2)) / 2.f;
+  } else {
+    median = principle_axis(n / 2);
+  }
+
   for (size_t i = 0; i < cluster.size(); i++) {
-    if (pca.transformed_data(i, 0) > 0) {
+    if (pca.transformed_data(i, 0) >= median) {
       cluster1.push_back(cluster[i]);
     } else {
       cluster2.push_back(cluster[i]);

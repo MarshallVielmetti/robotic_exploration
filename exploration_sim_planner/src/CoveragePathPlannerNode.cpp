@@ -75,6 +75,8 @@ void CoveragePathPlannerNode::map_callback(
   if (frontier_pub_->get_subscription_count() > 0 || DEBUG_MODE) {
     RCLCPP_DEBUG(get_logger(), "Publishing frontier clusters.");
     auto frontier_msg = msg_util::frontier_clusters_to_msg(frontier_clusters);
+    frontier_msg.header = msg->header;
+    frontier_msg.info = msg->info;
     frontier_pub_->publish(frontier_msg);
   }
 
