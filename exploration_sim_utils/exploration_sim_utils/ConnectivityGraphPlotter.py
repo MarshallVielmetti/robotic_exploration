@@ -54,7 +54,9 @@ class ConnectivityGraphPlotter(Node):
     num_rows = self.graph_.rows
 
     # transform in a 2D numpy array
-    connectivity = np.array(self.graph_.edges).reshape(num_rows, -1)
+    # self.graph_.edges is an array of Edges, which contain a float32 (cost), and a uint8 (label)
+    # connectivity = np.array(self.graph_.edges, dtype=np.uint8).reshape(num_rows, -1)
+    connectivity = np.array([edge.label for edge in self.graph_.edges], dtype=np.uint8).reshape(num_rows, -1)
 
     # iterate over the connectivity array -- it is symmetric
     for i in range(num_rows):

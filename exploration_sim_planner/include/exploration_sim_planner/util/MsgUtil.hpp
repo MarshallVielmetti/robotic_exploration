@@ -10,6 +10,7 @@
 
 #include "exploration_sim_msgs/msg/connectivity_graph.hpp"
 #include "exploration_sim_msgs/msg/edge.hpp"
+#include "exploration_sim_msgs/msg/frontier_clusters.hpp"
 #include "exploration_sim_msgs/msg/point2d.hpp"
 #include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
@@ -96,6 +97,21 @@ inline nav_msgs::msg::OccupancyGrid matrix_to_occupancy_grid(
     for (uint32_t x = 0; x < matrix.cols(); x++) {
       msg.data[y * matrix.cols() + x] = static_cast<int8_t>(matrix(y, x));
     }
+  }
+
+  return msg;
+}
+
+inline exploration_sim_msgs::msg::FrontierClusters frontier_clusters_to_msg(
+    const std::vector<std::vector<Eigen::Vector2i>>& clusters) {
+  exploration_sim_msgs::msg::FrontierClusters msg;
+
+  for (const auto& cluster : clusters) {
+    exploration_sim_msgs::msg::FrontierCluster frontier_cluster;
+    for (const auto& point : cluster) {
+      frontier_cluster.points.push_back(to_point2d(point.cast<double>()));
+    }
+    msg.clusters.push_back(frontier_cluster);
   }
 
   return msg;

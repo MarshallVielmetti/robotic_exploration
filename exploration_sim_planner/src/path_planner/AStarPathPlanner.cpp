@@ -1,7 +1,5 @@
 #include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
 
-#include <cstddef>
-#include <functional>
 #include <memory>
 #include <queue>
 #include <rclcpp/clock.hpp>

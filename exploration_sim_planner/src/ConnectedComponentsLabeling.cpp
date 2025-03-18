@@ -6,8 +6,10 @@
 
 #include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <list>
 #include <queue>
 #include <unordered_map>
 
@@ -19,6 +21,10 @@
 #define OGM_OCCUPIED 1
 #define OGM_FREE 0
 #define OGM_UNKNOWN -1
+
+#define MIN_FRONTIER_SIZE 3
+#define MIN_FRONTIER_SPLIT_THRESHOLD 10
+#define CLUSTER_EIGENVALUE_SPLIT_THRESHOLD 0.5
 
 /**
  * Definition of terms used
@@ -38,6 +44,8 @@ Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>
 ConnectedComponentsLabeling::label_cells(const OgmView& ogm) {
   Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic> cell_labels(
       ogm.height(), ogm.width());
+
+  std::vector<Eigen::Vector2i> frontier_cells;
 
   for (uint32_t y = 0; y < ogm.height(); y++) {
     for (uint32_t x = 0; x < ogm.width(); x++) {
@@ -59,6 +67,179 @@ CellLabel ConnectedComponentsLabeling::get_cell_label(const OgmView& ogm,
   } else {
     return CellLabel::UNSAFE_FREE;
   }
+}
+
+std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::find_frontier_cells(
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
+        cell_labels) {
+  std::vector<Eigen::Vector2i> frontier_cells;
+
+  for (uint32_t y = 0; y < cell_labels.rows(); y++) {
+    for (uint32_t x = 0; x < cell_labels.cols(); x++) {
+      if (is_frontier(cell_labels, x, y)) {
+        frontier_cells.push_back(Eigen::Vector2i(x, y));
+      }
+    }
+  }
+
+  return frontier_cells;
+}
+
+std::vector<std::vector<Eigen::Vector2i>>
+ConnectedComponentsLabeling::cluster_frontiers(
+    const std::vector<Eigen::Vector2i>& frontier_cells) {
+  // Uses the UnionFind datastructure
+  UnionFind uf(frontier_cells.size());
+
+  for (uint32_t i = 0; i < frontier_cells.size(); i++) {
+    for (uint32_t j = i + 1; j < frontier_cells.size(); j++) {
+      // check if the two cells are adjacent
+      auto diff = frontier_cells[i] - frontier_cells[j];
+
+      // allow uniting along diagonals
+      if (std::abs(diff.x()) <= 1 && std::abs(diff.y()) <= 1) {
+        uf.unite(i, j);
+      }
+    }
+  }
+
+  // map from cluster id to index in list
+  std::unordered_map<uint32_t, uint32_t> cluster_idxs;
+  std::vector<std::vector<Eigen::Vector2i>> clusters;
+
+  for (uint32_t i = 0; i < frontier_cells.size(); i++) {
+    uint32_t set_id = uf.find(i);
+
+    // encountered a new set id
+    if (!cluster_idxs.contains(set_id)) {
+      cluster_idxs[set_id] = clusters.size();
+      clusters.push_back(std::vector<Eigen::Vector2i>());
+    }
+
+    clusters[cluster_idxs[set_id]].push_back(frontier_cells[i]);
+  }
+
+  /* Filter the map
+   *
+   * If the cluster is too small, remove it
+   *
+   * If the cluster is too large, break it in half using PCA and create two new
+   * clusters, which are appended to the back of the map, so they can be further
+   * broken down if necessary
+   */
+
+  for (uint32_t i = 0; i < clusters.size();) {
+    // if the cluster is too small, remove it, swap with the back and pop
+    if (clusters[i].size() < MIN_FRONTIER_SIZE) {
+      std::iter_swap(clusters.begin() + i, std::prev(clusters.end()));
+      clusters.pop_back();
+      continue;
+    }
+
+    // if the cluster is too large, split it
+    PCAResult pca = cluster_pca(clusters[i]);
+
+    // If the maximum eigenvalue of the PCA is less than the split threshold,
+    // or its too small to split, then continue and increment i
+    if (pca.eigenvalues.maxCoeff() < CLUSTER_EIGENVALUE_SPLIT_THRESHOLD ||
+        clusters[i].size() < MIN_FRONTIER_SPLIT_THRESHOLD) {
+      i++;
+      continue;
+    }
+
+    // If the maximum eigenvalue of the PCA is greater than the split threshold,
+    // split the cluster along the first principal component
+    auto [cluster1, cluster2] = split_cluster(clusters[i], pca);
+    clusters[i] = cluster1;
+    clusters.push_back(cluster2);
+
+    // don't increment i here -- need to recursively evaluate cluster1, now
+    // located at i
+  }
+
+  // because we modified the clusters vector in place, just return it
+  return clusters;
+}
+
+bool ConnectedComponentsLabeling::is_frontier(
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
+    uint32_t x, uint32_t y) {
+  // frontier cell is an unknown cell that borders a free cell
+  if (cell_labels(y, x) != CellLabel::UNKNOWN) {
+    return false;
+  }
+
+  for (int32_t dy = -1; dy <= 1; dy++) {
+    for (int32_t dx = -1; dx <= 1; dx++) {
+      if ((dx == 0 && dy == 0) || (dx != 0 && dy != 0)) {
+        continue;
+      }
+
+      if (x + dx < 0 || x + dx >= cell_labels.cols() || y + dy < 0 ||
+          y + dy >= cell_labels.rows()) {
+        continue;
+      }
+
+      if (cell_labels(y + dy, x + dx) == CellLabel::SAFE_FREE ||
+          cell_labels(y + dy, x + dx) == CellLabel::UNSAFE_FREE) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+PCAResult ConnectedComponentsLabeling::cluster_pca(
+    std::vector<Eigen::Vector2i>& cluster) {
+  // convert the cluster to a matrix
+  Eigen::MatrixXd data(cluster.size(), 2);
+
+  for (size_t i = 0; i < cluster.size(); i++) {
+    data.row(i) = cluster[i].cast<double>();
+  }
+
+  // Step 1 : Mean Center the Data
+  Eigen::Vector2d mean = data.colwise().mean();
+  data.rowwise() -= mean.transpose();
+
+  // Step 2 : Compute the Covariance Matrix Q
+  // This can be estimated as XX^T / (n-1)
+  uint32_t n = data.rows();
+  Eigen::MatrixXd Q = data * data.transpose() / (n - 1);
+
+  // Step 3 : Perform Singular Value Decomposition
+  Eigen::JacobiSVD<Eigen::MatrixXd> svd(Q, Eigen::ComputeFullU);
+
+  // Step 4 : Compute the Eigenvectors and Eigenvalues
+  Eigen::MatrixXd eigenvectors = svd.matrixU();
+  Eigen::VectorXd eigenvalues = svd.singularValues();
+
+  // Step 5 : Apply the transformation
+  // It is given by X_new = V^T * X
+  Eigen::MatrixXd transformed_data = eigenvectors.transpose() * data;
+
+  return PCAResult(eigenvalues, eigenvectors, transformed_data);
+}
+
+std::pair<std::vector<Eigen::Vector2i>, std::vector<Eigen::Vector2i>>
+ConnectedComponentsLabeling::split_cluster(
+    const std::vector<Eigen::Vector2i>& cluster, const PCAResult& pca) {
+  // we have the transformed data, so we can simply check whether the value of
+  // the first component is greater than 0 or less than 0 to determine which
+  // cluster the point belongs to
+
+  std::vector<Eigen::Vector2i> cluster1, cluster2;
+
+  for (size_t i = 0; i < cluster.size(); i++) {
+    if (pca.transformed_data(i, 0) > 0) {
+      cluster1.push_back(cluster[i]);
+    } else {
+      cluster2.push_back(cluster[i]);
+    }
+  }
+
+  return std::make_pair(cluster1, cluster2);
 }
 
 bool ConnectedComponentsLabeling::is_safe_free(const OgmView& ogm, uint32_t x,
@@ -318,8 +499,8 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
 
   // helper function to check if a cell is valid to be considered in the
   // exploration process -- restricted astar
-  std::function<bool(const Eigen::Vector2i&)> is_valid_cell =
-      [&](const Eigen::Vector2i& cell) {
+  std::function<bool(const Eigen::Vector2i)> is_valid_cell =
+      [&](const Eigen::Vector2i cell) {
         // check that the cell is in the map
         if (cell.x() < 0 || cell.x() >= cell_labels.cols() || cell.y() < 0 ||
             cell.y() >= cell_labels.rows()) {
@@ -344,15 +525,14 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
         int cell_sector_x = cell.x() / sector_size_;
         int cell_sector_y = cell.y() / sector_size_;
 
-        // verify the cell is in the same sector as the start or goal cells
-        if ((start_sector_x != cell_sector_x ||
-             start_sector_y != cell_sector_y) &&
-            (goal_sector_x != cell_sector_x ||
-             goal_sector_y != cell_sector_y)) {
-          return false;
-        }
+        bool in_start_sector = (start_sector_x == cell_sector_x &&
+                                start_sector_y == cell_sector_y);
 
-        return true;
+        bool in_goal_sector =
+            (goal_sector_x == cell_sector_x && goal_sector_y == cell_sector_y);
+
+        // verify the cell is in the same sector as the start or goal cells
+        return in_start_sector || in_goal_sector;
       };
 
   PathPlannerUtil::PqNodeCompare comparator(goal);
@@ -407,7 +587,7 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
 
 std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::get_valid_neighbors(
     const Eigen::Vector2i& cell,
-    std::function<bool(const Eigen::Vector2i&)>& is_valid_cell) {
+    std::function<bool(const Eigen::Vector2i)>& is_valid_cell) {
   // vector to store return values
   std::vector<Eigen::Vector2i> neighbors;
 
@@ -418,12 +598,14 @@ std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::get_valid_neighbors(
         continue;
       }
 
+      auto candidate = cell + Eigen::Vector2i(dx, dy);
+
       // check if neighboring cell is valid
-      if (!is_valid_cell(cell + Eigen::Vector2i(dx, dy))) {
+      if (!is_valid_cell(candidate)) {
         continue;
       }
 
-      neighbors.push_back(cell + Eigen::Vector2i(dx, dy));
+      neighbors.push_back(candidate);
     }
   }
 

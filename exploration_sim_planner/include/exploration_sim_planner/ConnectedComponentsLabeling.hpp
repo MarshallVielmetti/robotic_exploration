@@ -60,6 +60,16 @@ struct ConnectivityGraph {
   }
 };
 
+struct PCAResult {
+  Eigen::VectorXd eigenvalues;
+  Eigen::MatrixXd eigenvectors;
+  Eigen::MatrixXd transformed_data;
+
+  PCAResult(Eigen::VectorXd& evals, Eigen::MatrixXd& evecs,
+            Eigen::MatrixXd& data)
+      : eigenvalues(evals), eigenvectors(evecs), transformed_data(data) {}
+};
+
 /**
  * @brief Implements labeling and analysis of connected components in an
  * occupancy grid.
@@ -122,6 +132,38 @@ class ConnectedComponentsLabeling {
    */
   Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic> label_cells(
       const OgmView& ogm);
+
+  /**
+   * @brief Identifies and extracts frontier cells from a labeled occupancy
+   * grid.
+   *
+   * Frontier cells are typically located at the boundary between explored free
+   * space and unexplored areas. These cells are essential for exploration
+   * planning as they represent potential directions for further exploration.
+   *
+   * @param cell_labels A matrix where each cell is labeled according to its
+   * state (e.g., free, occupied, unknown, frontier)
+   * @return A vector of 2D coordinates representing the positions of all
+   * identified frontier cells in the grid
+   */
+  std::vector<Eigen::Vector2i> find_frontier_cells(
+      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
+          cell_labels);
+
+  /**
+   * @brief Clusters frontier cells into connected components.
+   *
+   * This function takes a list of frontier cells and groups them into clusters
+   * where each cluster represents a connected component of frontier cells.
+   *
+   * @param frontier_cells Vector of 2D points representing individual frontier
+   * cells
+   *
+   * @return Vector of clusters, where each cluster is a vector of connected
+   * frontier cells
+   */
+  std::vector<std::vector<Eigen::Vector2i>> cluster_frontiers(
+      const std::vector<Eigen::Vector2i>& frontier_cells);
 
   /**
    * @brief Computes zones based on connected components labeling of cell
@@ -241,7 +283,17 @@ class ConnectedComponentsLabeling {
 
   std::vector<Eigen::Vector2i> get_valid_neighbors(
       const Eigen::Vector2i& cell,
-      std::function<bool(const Eigen::Vector2i&)>& is_valid_cell);
+      std::function<bool(const Eigen::Vector2i)>& is_valid_cell);
+
+  bool is_frontier(const Eigen::Matrix<CellLabel, Eigen::Dynamic,
+                                       Eigen::Dynamic>& cell_labels,
+                   uint32_t x, uint32_t y);
+
+  PCAResult cluster_pca(std::vector<Eigen::Vector2i>& cluster);
+
+  std::pair<std::vector<Eigen::Vector2i>, std::vector<Eigen::Vector2i>>
+  split_cluster(const std::vector<Eigen::Vector2i>& cluster,
+                const PCAResult& pca);
 
   /**
    * @brief Removes isolated subcomponents from the connectivity graph.

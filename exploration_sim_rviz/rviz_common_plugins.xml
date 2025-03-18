@@ -1,0 +1,5 @@
+<library path="libfrontier_display">
+  <class type="exploration_sim_rviz::FrontierDisplay" base_class_type="rviz_common::Display">
+    <description>Displays frontier markers</description>
+  </class>
+</library>

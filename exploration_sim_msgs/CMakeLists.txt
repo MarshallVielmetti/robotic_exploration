@@ -14,6 +14,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Edge.msg"
   "msg/Point2d.msg"
   "msg/ConnectivityGraph.msg"
+  "msg/FrontierCluster.msg"
+  "msg/FrontierClusters.msg"
   DEPENDENCIES std_msgs
 )
 

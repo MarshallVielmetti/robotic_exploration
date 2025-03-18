@@ -38,6 +38,9 @@ CoveragePathPlannerNode::CoveragePathPlannerNode()
       create_publisher<nav_msgs::msg::OccupancyGrid>("cell_labels", 10);
 
   zones_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>("zones", 10);
+
+  frontier_pub_ = create_publisher<exploration_sim_msgs::msg::FrontierClusters>(
+      "frontier_clusters", 10);
 }
 
 void CoveragePathPlannerNode::map_callback(
@@ -58,6 +61,21 @@ void CoveragePathPlannerNode::map_callback(
     RCLCPP_DEBUG(get_logger(), "Publishing cell labels.");
     auto labels_msg = msg_util::matrix_to_occupancy_grid(cell_labels, msg);
     labels_pub_->publish(labels_msg);
+  }
+
+  // get a list of frontier cells
+  auto frontier_cells =
+      connected_components_util_.find_frontier_cells(cell_labels);
+
+  // Run set union algorithm on the frontier cells
+  auto frontier_clusters =
+      connected_components_util_.cluster_frontiers(frontier_cells);
+
+  // Publish the frontier clusters if anyone is subscribed to the topic
+  if (frontier_pub_->get_subscription_count() > 0 || DEBUG_MODE) {
+    RCLCPP_DEBUG(get_logger(), "Publishing frontier clusters.");
+    auto frontier_msg = msg_util::frontier_clusters_to_msg(frontier_clusters);
+    frontier_pub_->publish(frontier_msg);
   }
 
   // Compute zones based on the cell labels
