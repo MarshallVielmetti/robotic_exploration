@@ -30,6 +30,7 @@ protected:
 private:
   using ShapePtr = std::unique_ptr<rviz_rendering::Shape>;
   std::vector<std::vector<ShapePtr>> cluster_markers_;
+  std::vector<std::vector<ShapePtr>> viewpoint_markers_;
 
   void clearMarkers();
   Ogre::ColourValue getClusterColor(int cluster_id);

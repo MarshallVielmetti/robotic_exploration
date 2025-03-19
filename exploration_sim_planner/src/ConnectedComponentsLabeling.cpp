@@ -269,6 +269,7 @@ ConnectedComponentsLabeling::sample_frontier_viewpoints(
     const std::vector<std::vector<Eigen::Vector2i>>& frontier_clusters,
     const Eigen::MatrixX<CellLabel>& cell_labels) {
   std::vector<std::vector<Eigen::Vector2d>> viewpoints;
+  viewpoints.resize(frontier_clusters.size());
 
   // applies a parallel transformation from frontier_clusters to viewpoints
   std::transform(std::execution::par, frontier_clusters.begin(),
@@ -316,7 +317,7 @@ ConnectedComponentsLabeling::sample_one_frontier_viewpoints(
       }
 
       if (cell_labels(point_i.y(), point_i.x()) == CellLabel::SAFE_FREE) {
-        viewpoints.push_back(point_i);
+        viewpoints.push_back(point);
       }
     }
   }
@@ -334,7 +335,7 @@ void ConnectedComponentsLabeling::filter_viewpoints(
   std::transform(
       std::execution::seq, viewpoints.begin(), viewpoints.end(),
       coverage.begin(),
-      [&cell_labels, &frontier_cells](const Eigen::Vector2i& viewpoint) {
+      [&cell_labels, &frontier_cells](const Eigen::Vector2d& viewpoint) {
         return calculate_coverage(viewpoint, frontier_cells, cell_labels);
       });
 

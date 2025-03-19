@@ -22,7 +22,15 @@ void FrontierDisplay::clearMarkers() {
       marker.reset();
     }
   }
+
+  for (auto &viewpoints : viewpoint_markers_) {
+    for (auto &marker : viewpoints) {
+      marker.reset();
+    }
+  }
+
   cluster_markers_.clear();
+  viewpoint_markers_.clear();
 }
 
 void FrontierDisplay::reset() {
@@ -94,8 +102,10 @@ void FrontierDisplay::processMessage(
 
   // process each cluster
   cluster_markers_.resize(msg->clusters.size());
+  viewpoint_markers_.resize(msg->clusters.size());
   for (size_t i = 0; i < msg->clusters.size(); ++i) {
     const auto &cluster = msg->clusters[i];
+
     Ogre::ColourValue color = getClusterColor(i);
 
     // create a marker for each frontier in the cluster
@@ -103,7 +113,7 @@ void FrontierDisplay::processMessage(
     for (size_t j = 0; j < cluster.points.size(); ++j) {
       const auto &frontier = cluster.points[j];
 
-      // create a sphere marker
+      // create a square marker
       cluster_markers_[i][j] = std::make_unique<rviz_rendering::Shape>(
           rviz_rendering::Shape::Cube, context_->getSceneManager(),
           scene_node_);
@@ -118,6 +128,27 @@ void FrontierDisplay::processMessage(
 
       // set the color of the marker
       cluster_markers_[i][j]->setColor(color);
+    }
+
+    // display the viewpoints
+    viewpoint_markers_[i].resize(cluster.viewpoints.size());
+    for (size_t j = 0; j < cluster.viewpoints.size(); j++) {
+      const auto &vp = cluster.viewpoints[j];
+
+      // create a small sphere marker
+      viewpoint_markers_[i][j] = std::make_unique<rviz_rendering::Shape>(
+          rviz_rendering::Shape::Sphere, context_->getSceneManager(),
+          scene_node_);
+
+      float x = vp.x * cell_size + origin.x;
+      float y = vp.y * cell_size + origin.y;
+
+      // set the position and scale of the marker
+      viewpoint_markers_[i][j]->setPosition(Ogre::Vector3(x, y, z_offset));
+      viewpoint_markers_[i][j]->setScale(Ogre::Vector3(cell_size / 4.0f));
+
+      // set the color of the marker
+      viewpoint_markers_[i][j]->setColor(color);
     }
   }
 }
