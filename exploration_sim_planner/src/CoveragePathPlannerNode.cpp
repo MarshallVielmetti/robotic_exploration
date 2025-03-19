@@ -71,10 +71,15 @@ void CoveragePathPlannerNode::map_callback(
   auto frontier_clusters =
       connected_components_util_.cluster_frontiers(frontier_cells);
 
+  auto frontier_viewpoints =
+      connected_components_util_.sample_frontier_viewpoints(frontier_clusters,
+                                                            cell_labels);
+
   // Publish the frontier clusters if anyone is subscribed to the topic
   if (frontier_pub_->get_subscription_count() > 0 || DEBUG_MODE) {
     RCLCPP_DEBUG(get_logger(), "Publishing frontier clusters.");
-    auto frontier_msg = msg_util::frontier_clusters_to_msg(frontier_clusters);
+    auto frontier_msg = msg_util::frontier_clusters_to_msg(frontier_clusters,
+                                                           frontier_viewpoints);
     frontier_msg.header = msg->header;
     frontier_msg.info = msg->info;
     frontier_pub_->publish(frontier_msg);

@@ -165,6 +165,10 @@ class ConnectedComponentsLabeling {
   std::vector<std::vector<Eigen::Vector2i>> cluster_frontiers(
       const std::vector<Eigen::Vector2i>& frontier_cells);
 
+  std::vector<std::vector<Eigen::Vector2d>> sample_frontier_viewpoints(
+      const std::vector<std::vector<Eigen::Vector2i>>& frontier_cells,
+      const Eigen::MatrixX<CellLabel>& cell_labels);
+
   /**
    * @brief Computes zones based on connected components labeling of cell
    * labels.
@@ -294,6 +298,73 @@ class ConnectedComponentsLabeling {
   std::pair<std::vector<Eigen::Vector2i>, std::vector<Eigen::Vector2i>>
   split_cluster(const std::vector<Eigen::Vector2i>& cluster,
                 const PCAResult& pca);
+
+  /**
+   * @brief Samples viewpoints for one frontier cluster
+   *
+   * @param frontier_cluster A vector of grid cell coordinates (Eigen::Vector2i)
+   * that represents the frontier cluster for which viewpoints should be
+   * sampled.
+   *
+   * @param cell_labels A matrix (Eigen::MatrixX) of CellLabel containing the
+   * labels for each cell.
+   *
+   * @return A vector of 2D points (Eigen::Vector2d) representing the sampled
+   * viewpoints
+   */
+  static std::vector<Eigen::Vector2d> sample_one_frontier_viewpoints(
+      const std::vector<Eigen::Vector2i>& frontier_cluster,
+      const Eigen::MatrixX<CellLabel>& cell_labels);
+
+  /**
+   * @brief Filters and refines a list of viewpoint positions based on frontier
+   * cells and their labels.
+   *
+   * This function processes the provided vector of viewpoints and prunes or
+   * adjusts it according to associated frontier cell positions and their
+   * corresponding cell labels as represented in the cell_labels matrix. The
+   * filtering criteria and maneuvers are determined by the connectivity or
+   * labeling information in cell_labels, which typically represents segmented
+   * regions or connected components in the grid.
+   *
+   * @param[out] viewpoints A modifiable vector of Eigen::Vector2d representing
+   * candidate viewpoints. The function filters these viewpoints based on the
+   * provided frontier cells and the connectivity information. After execution,
+   * this vector will contain only the viewpoints that meet the filtering
+   * criteria.
+   * @param[in] frontier_cells A vector of Eigen::Vector2i representing the
+   * positions of frontier cells. These are used in conjunction with the
+   * connectivity matrix to determine valid viewpoints.
+   * @param[in] cell_labels A matrix of CellLabel elements where each element
+   * corresponds to a cell's label in the grid. This matrix provides the
+   * necessary connectivity or segment information that is used to filter the
+   * viewpoints.
+   */
+  static void filter_viewpoints(
+      std::vector<Eigen::Vector2d>& viewpoints,
+      const std::vector<Eigen::Vector2i>& frontier_cells,
+      const Eigen::MatrixX<CellLabel>& cell_labels);
+
+  /**
+   * @brief Calculates the coverage metric from a given viewpoint.
+   *
+   * This function computes a coverage value based on the location of the
+   * viewpoint, the list of frontier cells identified in the environment, and
+   * the matrix of cell labels that describe the state or connectivity of each
+   * cell. The coverage value can be used to determine the extent of the
+   * explored area or the effectiveness of the exploration strategy.
+   *
+   * @param viewpoint A 2D vector representing the coordinates of the viewpoint.
+   * @param frontier_cells A vector of 2D integer vectors, each representing the
+   * grid coordinates of a frontier cell.
+   * @param cell_labels A matrix of CellLabel objects that categorizes each cell
+   * within the grid.
+   * @return A double value representing the calculated coverage.
+   */
+  static double calculate_coverage(
+      const Eigen::Vector2d& viewpoint,
+      const std::vector<Eigen::Vector2i>& frontier_cells,
+      const Eigen::MatrixX<CellLabel>& cell_labels);
 
   /**
    * @brief Removes isolated subcomponents from the connectivity graph.

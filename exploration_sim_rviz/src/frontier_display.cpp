@@ -87,13 +87,16 @@ void FrontierDisplay::processMessage(
     return;
 
   float cell_size = msg->info.resolution;
-
   auto origin = msg->info.origin.position;
+
+  // small z offset to overlay it above the OGM
+  const float z_offset = 0.01f;
 
   // process each cluster
   cluster_markers_.resize(msg->clusters.size());
   for (size_t i = 0; i < msg->clusters.size(); ++i) {
     const auto &cluster = msg->clusters[i];
+    Ogre::ColourValue color = getClusterColor(i);
 
     // create a marker for each frontier in the cluster
     cluster_markers_[i].resize(cluster.points.size());
@@ -102,17 +105,19 @@ void FrontierDisplay::processMessage(
 
       // create a sphere marker
       cluster_markers_[i][j] = std::make_unique<rviz_rendering::Shape>(
-          rviz_rendering::Shape::Sphere, context_->getSceneManager(),
+          rviz_rendering::Shape::Cube, context_->getSceneManager(),
           scene_node_);
 
+      float x = frontier.x * cell_size + origin.x + cell_size / 2.0f;
+      float y = frontier.y * cell_size + origin.y + cell_size / 2.0f;
+
       // set the position and scale of the marker
-      cluster_markers_[i][j]->setPosition(
-          Ogre::Vector3(frontier.x * cell_size + origin.x,
-                        frontier.y * cell_size + origin.y, 0.0f));
-      cluster_markers_[i][j]->setScale(Ogre::Vector3(cell_size / 2.0f));
+      cluster_markers_[i][j]->setPosition(Ogre::Vector3(x, y, z_offset));
+      cluster_markers_[i][j]->setScale(
+          Ogre::Vector3(cell_size, cell_size, 0.001f));
 
       // set the color of the marker
-      cluster_markers_[i][j]->setColor(getClusterColor(i));
+      cluster_markers_[i][j]->setColor(color);
     }
   }
 }

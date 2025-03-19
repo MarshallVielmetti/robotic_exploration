@@ -7,6 +7,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <cstddef>
 
 #include "exploration_sim_msgs/msg/connectivity_graph.hpp"
 #include "exploration_sim_msgs/msg/edge.hpp"
@@ -103,16 +104,30 @@ inline nav_msgs::msg::OccupancyGrid matrix_to_occupancy_grid(
 }
 
 inline exploration_sim_msgs::msg::FrontierClusters frontier_clusters_to_msg(
-    const std::vector<std::vector<Eigen::Vector2i>>& clusters) {
+    const std::vector<std::vector<Eigen::Vector2i>>& clusters,
+    const std::vector<std::vector<Eigen::Vector2d>>& viewpoints) {
   exploration_sim_msgs::msg::FrontierClusters msg;
 
-  for (const auto& cluster : clusters) {
+  for (size_t i = 0; i < clusters.size(); i++) {
     exploration_sim_msgs::msg::FrontierCluster frontier_cluster;
-    for (const auto& point : cluster) {
+    for (const auto& point : clusters[i]) {
       frontier_cluster.points.push_back(to_point2d(point.cast<double>()));
     }
+
+    for (const auto& viewpoint : viewpoints[i]) {
+      frontier_cluster.viewpoints.push_back(to_point2d(viewpoint));
+    }
+
     msg.clusters.push_back(frontier_cluster);
   }
+
+  // for (const auto& cluster : clusters) {
+  //   exploration_sim_msgs::msg::FrontierCluster frontier_cluster;
+  //   for (const auto& point : cluster) {
+  //     frontier_cluster.points.push_back(to_point2d(point.cast<double>()));
+  //   }
+  //   msg.clusters.push_back(frontier_cluster);
+  // }
 
   return msg;
 }

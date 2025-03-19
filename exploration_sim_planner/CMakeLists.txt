@@ -19,6 +19,7 @@ find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(TBB REQUIRED)
 
 # custom packages
 find_package(exploration_sim_msgs REQUIRED)
@@ -39,6 +40,7 @@ target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 add_executable(coverage_path_planner src/CoveragePathPlannerNode.cpp src/ConnectedComponentsLabeling.cpp)
 ament_target_dependencies(coverage_path_planner rclcpp nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
+target_link_libraries(coverage_path_planner TBB::tbb)
 target_include_directories(coverage_path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 # add_executable(trajectory_tracker src/TrajectoryTrackerNode.cpp src/trajectory_tracker/MPPITrajectoryTracker.cpp)

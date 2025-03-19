@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <execution>
 #include <iterator>
 #include <queue>
 #include <unordered_map>
@@ -17,13 +18,18 @@
 #include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
 #include "exploration_sim_planner/util/UnionFind.hpp"
 
-#define OGM_OCCUPIED 1
+#define OGM_OCCUPIED 100
 #define OGM_FREE 0
 #define OGM_UNKNOWN -1
 
 #define MIN_FRONTIER_SIZE 3
 #define MIN_FRONTIER_SPLIT_THRESHOLD 10
 #define CLUSTER_EIGENVALUE_SPLIT_THRESHOLD 0.5
+
+#define SENSOR_RANGE 10
+#define RAYCAST_RESOLUTION 0.1
+
+#define N_VIEW_MAX 8
 
 /**
  * Definition of terms used
@@ -195,20 +201,20 @@ bool ConnectedComponentsLabeling::is_frontier(
 PCAResult ConnectedComponentsLabeling::cluster_pca(
     std::vector<Eigen::Vector2i>& cluster) {
   // convert the cluster to a matrix
-  Eigen::MatrixXd data(cluster.size(), 2);
+  Eigen::MatrixXd data(cluster.size(), 2);  // nx2 matrix of data points
 
   for (size_t i = 0; i < cluster.size(); i++) {
     data.row(i) = cluster[i].cast<double>();
   }
 
   // Step 1 : Mean Center the Data
-  Eigen::Vector2d mean = data.colwise().mean();
+  Eigen::Vector2d mean = data.colwise().mean();  // 2x1 vector
   data.rowwise() -= mean.transpose();
 
   // Step 2 : Compute the Covariance Matrix Q
-  // This can be estimated as XX^T / (n-1)
+  // This can be estimated as X^T X / (n-1) (resulting matrix is 2x2)
   uint32_t n = data.rows();
-  Eigen::MatrixXd Q = data * data.transpose() / (n - 1);
+  Eigen::MatrixXd Q = data.transpose() * data / static_cast<double>(n - 1);
 
   // Step 3 : Perform Singular Value Decomposition
   Eigen::JacobiSVD<Eigen::MatrixXd> svd(Q, Eigen::ComputeFullU);
@@ -218,8 +224,8 @@ PCAResult ConnectedComponentsLabeling::cluster_pca(
   Eigen::VectorXd eigenvalues = svd.singularValues();
 
   // Step 5 : Apply the transformation
-  // It is given by X_new = V^T * X
-  Eigen::MatrixXd transformed_data = eigenvectors.transpose() * data;
+  // It is given by X_new = X V, where X is the mean centered data
+  Eigen::MatrixXd transformed_data = data * eigenvectors;
 
   return PCAResult(eigenvalues, eigenvectors, transformed_data);
 }
@@ -256,6 +262,169 @@ ConnectedComponentsLabeling::split_cluster(
   }
 
   return std::make_pair(cluster1, cluster2);
+}
+
+std::vector<std::vector<Eigen::Vector2d>>
+ConnectedComponentsLabeling::sample_frontier_viewpoints(
+    const std::vector<std::vector<Eigen::Vector2i>>& frontier_clusters,
+    const Eigen::MatrixX<CellLabel>& cell_labels) {
+  std::vector<std::vector<Eigen::Vector2d>> viewpoints;
+
+  // applies a parallel transformation from frontier_clusters to viewpoints
+  std::transform(std::execution::par, frontier_clusters.begin(),
+                 frontier_clusters.end(), viewpoints.begin(),
+                 [&cell_labels](const std::vector<Eigen::Vector2i>& cluster) {
+                   // sample a viewpoint for each frontier cluster
+                   auto vp =
+                       sample_one_frontier_viewpoints(cluster, cell_labels);
+
+                   // filter the viewpoints
+                   filter_viewpoints(vp, cluster, cell_labels);
+                   return vp;
+                 });
+
+  return viewpoints;
+}
+
+std::vector<Eigen::Vector2d>
+ConnectedComponentsLabeling::sample_one_frontier_viewpoints(
+    const std::vector<Eigen::Vector2i>& frontier_cluster,
+    const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
+        cell_labels) {
+  // find the center of the cluster
+  Eigen::Vector2d center = Eigen::Vector2d::Zero();
+  for (const auto& point : frontier_cluster) {
+    center += point.cast<double>();
+  }
+  center /= frontier_cluster.size();
+
+  // use cylindrical coordinates to sample points around the center lying in
+  // free space
+
+  std::vector<Eigen::Vector2d> viewpoints;
+
+  for (double theta = 0; theta < 2 * M_PI; theta += M_PI / 4) {
+    for (double r = 1; r < SENSOR_RANGE; r++) {
+      Eigen::Vector2d point =
+          center + Eigen::Vector2d{r * cos(theta), r * sin(theta)};
+
+      Eigen::Vector2i point_i = point.cast<int>();
+
+      if (point_i.x() < 0 || point_i.x() >= cell_labels.cols() ||
+          point_i.y() < 0 || point_i.y() >= cell_labels.rows()) {
+        continue;
+      }
+
+      if (cell_labels(point_i.y(), point_i.x()) == CellLabel::SAFE_FREE) {
+        viewpoints.push_back(point_i);
+      }
+    }
+  }
+
+  return viewpoints;
+}
+
+void ConnectedComponentsLabeling::filter_viewpoints(
+    std::vector<Eigen::Vector2d>& viewpoints,
+    const std::vector<Eigen::Vector2i>& frontier_cells,
+    const Eigen::MatrixX<CellLabel>& cell_labels) {
+  std::vector<double> coverage(viewpoints.size(), 0.0);
+
+  // In parallel, calculates the coverage of each viewpoint
+  std::transform(
+      std::execution::seq, viewpoints.begin(), viewpoints.end(),
+      coverage.begin(),
+      [&cell_labels, &frontier_cells](const Eigen::Vector2i& viewpoint) {
+        return calculate_coverage(viewpoint, frontier_cells, cell_labels);
+      });
+
+  // now using the coverage, filter out the viewpoints
+
+  // sort the viewpoints by coverage
+  std::vector<size_t> indices(viewpoints.size());
+  std::iota(indices.begin(), indices.end(), 0);
+
+  std::sort(indices.begin(), indices.end(), [&coverage](size_t i1, size_t i2) {
+    return coverage[i1] > coverage[i2];
+  });
+
+  // compute the mean and standard deviation of the coverage, and return
+  // at most N_view cells, all of which are at least in the top 75% of coverage
+
+  double mean = std::accumulate(coverage.begin(), coverage.end(), 0.0) /
+                static_cast<double>(coverage.size());
+
+  double variance = 0.0;
+  for (size_t i = 0; i < coverage.size(); i++) {
+    variance += (coverage[i] - mean) * (coverage[i] - mean);
+  }
+
+  variance /= coverage.size();
+
+  double std_dev = sqrt(variance);
+
+  std::vector<Eigen::Vector2d> filtered_viewpoints(N_VIEW_MAX);
+
+  // compute the threshold
+  double threshold = mean - 0.75 * std_dev;
+
+  // Take first N_VIEW_MAX viewpoints that have coverage greater than threshold
+  uint32_t n_selected = 0;
+  for (size_t idx : indices) {
+    if (n_selected >= N_VIEW_MAX) {
+      break;
+    }
+
+    if (coverage[idx] >= threshold) {
+      filtered_viewpoints[n_selected++] = viewpoints[idx];
+    }
+  }
+
+  // resize the viewpoints vector if less than N_VIEW_MAX selected
+  if (n_selected < N_VIEW_MAX) {
+    filtered_viewpoints.resize(n_selected);
+  }
+
+  // overwrite the passed viewpoints vector
+  viewpoints = std::move(filtered_viewpoints);
+}
+
+// checks if line from viewpoint to every frontier cell is free and within
+// sensor range
+double ConnectedComponentsLabeling::calculate_coverage(
+    const Eigen::Vector2d& viewpoint,
+    const std::vector<Eigen::Vector2i>& frontier_cells,
+    const Eigen::MatrixX<CellLabel>& cell_labels) {
+  double coverage = 0.0f;
+
+  std::for_each(
+      std::execution::seq, frontier_cells.begin(), frontier_cells.end(),
+      [&coverage, &viewpoint, &cell_labels](const Eigen::Vector2i& cell) {
+        Eigen::Vector2d diff = cell.cast<double>() - viewpoint;
+        double distance = diff.norm();
+
+        if (distance > SENSOR_RANGE) {
+          return;
+        }
+
+        // check if the line of sight is occluded -- if so, return;
+        // TODO -- definitely a better algorithm...could probably also improve
+        // the sampling process to sample along a ray until it becomes occluded
+        // or smthing
+        for (double i = 1; i < distance; i += RAYCAST_RESOLUTION) {
+          Eigen::Vector2i point =
+              (viewpoint + (diff * i / distance)).cast<int>();
+
+          if (cell_labels(point.y(), point.x()) != CellLabel::SAFE_FREE) {
+            return;
+          }
+        }
+
+        // TODO -- maybe weigh distance to points?
+        coverage += 1.0;
+      });
+
+  return coverage;
 }
 
 bool ConnectedComponentsLabeling::is_safe_free(const OgmView& ogm, uint32_t x,
