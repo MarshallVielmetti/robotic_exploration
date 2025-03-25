@@ -22,7 +22,7 @@ TrajectoryTrackerNode::TrajectoryTrackerNode() : Node("trajectory_tracker") {
 
   // Create a subscriber for the path
   path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
-      "path", 10, [this](const nav_msgs::msg::Path::SharedPtr msg) {
+      "short_term_path", 10, [this](const nav_msgs::msg::Path::SharedPtr msg) {
         this->current_path_ = *msg;
       });
 

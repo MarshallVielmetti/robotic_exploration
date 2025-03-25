@@ -86,6 +86,10 @@ class OgmView {
     return cell;
   }
 
+  Eigen::Vector2d world_to_map(const Eigen::Vector2d &point) {
+    return (point - origin_) / resolution_;
+  }
+
   int8_t operator()(const uint32_t x, const uint32_t y) const {
     return get(x, y);
   }

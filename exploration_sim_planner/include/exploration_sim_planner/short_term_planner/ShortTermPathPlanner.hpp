@@ -20,6 +20,8 @@
 #include <optional>
 #include <vector>
 
+#include "nav_msgs/msg/path.hpp"
+
 struct CubicBSpline {};
 
 class ShortTermPathPlanner {
@@ -39,8 +41,10 @@ class ShortTermPathPlanner {
    */
   static std::vector<Eigen::Vector2d> fit_smoothed_path(
       const Eigen::MatrixXd& esdf,
-      const std::vector<Eigen::Vector2d>& global_path,
-      const Eigen::Vector2d& current_position);
+      const std::vector<Eigen::Vector2d>& global_path);
+
+  static bool check_path_safety(const Eigen::MatrixXd& esdf,
+                                const nav_msgs::msg::Path& path);
 
  private:
   /**
@@ -54,8 +58,7 @@ class ShortTermPathPlanner {
    */
   static std::optional<std::vector<Eigen::Vector2i>> fit_astar(
       const Eigen::MatrixXd& esdf,
-      const std::vector<Eigen::Vector2d>& global_path,
-      const Eigen::Vector2d& current_position);
+      const std::vector<Eigen::Vector2d>& global_path);
 
   static CubicBSpline fit_cubic_bspline(
       const Eigen::MatrixXd& esdf,

@@ -31,8 +31,11 @@ CoveragePathPlannerNode::CoveragePathPlannerNode()
       std::bind(&CoveragePathPlannerNode::map_callback, this,
                 std::placeholders::_1));
 
+  auto pose_qos = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
   pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
-      "pose", 10, [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+      "robot_pose", pose_qos,
+      [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+        RCLCPP_INFO(get_logger(), "Received a new pose message.");
         this->robot_pose_ = *msg;
       });
 
@@ -48,7 +51,7 @@ CoveragePathPlannerNode::CoveragePathPlannerNode()
   frontier_pub_ = create_publisher<exploration_sim_msgs::msg::FrontierClusters>(
       "frontier_clusters", 10);
 
-  path_pub_ = create_publisher<nav_msgs::msg::Path>("path", 10);
+  path_pub_ = create_publisher<nav_msgs::msg::Path>("coverage_path", 10);
 
   tsp_solver_ = std::make_unique<SimulatedAnnealingSolver>(500000, 0.9995);
 }
