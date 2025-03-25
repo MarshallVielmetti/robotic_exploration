@@ -1,4 +1,4 @@
-#include "exploration_sim_planner/controller/DiffDriveController.hpp"
+#include "exploration_sim_planner/nodes/DiffDriveControllerNode.hpp"
 
 using namespace std::chrono_literals;
 

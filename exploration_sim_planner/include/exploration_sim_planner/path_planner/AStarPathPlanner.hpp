@@ -1,3 +1,7 @@
+/**
+ * @file AStarPathPlanner.hpp
+ */
+
 #pragma once
 
 #include <Eigen/Dense>
@@ -6,26 +10,6 @@
 
 #include "exploration_sim_planner/path_planner/AbstractPathPlanner.hpp"
 #include "exploration_sim_planner/util/OgmView.hpp"
-
-namespace std {
-template <>
-struct hash<Eigen::Vector2i> {
-  std::size_t operator()(const Eigen::Vector2i &v) const {
-    std::size_t h1 = std::hash<int>()(v.x());
-    std::size_t h2 = std::hash<int>()(v.y());
-    return h1 ^ (h2 << 1);
-  }
-};
-
-template <>
-struct hash<Eigen::Vector2d> {
-  std::size_t operator()(const Eigen::Vector2d &v) const {
-    std::size_t h1 = std::hash<double>()(v.x());
-    std::size_t h2 = std::hash<double>()(v.y());
-    return h1 ^ (h2 << 1);
-  }
-};
-}  // namespace std
 
 /**
  * @brief Utility structures for the A* path planning algorithm.

@@ -5,10 +5,12 @@
  * ShortTermPathPlanner.hpp.
  */
 
-#include "exploration_sim_planner/ShortTermPathPlanner.hpp"
+#include "exploration_sim_planner/short_term_planner/ShortTermPathPlanner.hpp"
 
+#include <Eigen/Dense>
 #include <iterator>
 #include <optional>
+#include <vector>
 
 #include "exploration_sim_planner/util/AStar.hpp"
 

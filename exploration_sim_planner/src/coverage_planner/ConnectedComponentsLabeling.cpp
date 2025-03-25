@@ -18,8 +18,9 @@
 
 #include "Eigen/src/Core/Matrix.h"
 #include "Eigen/src/Core/util/Constants.h"
-#include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
 #include "exploration_sim_planner/util/AStar.hpp"
+#include "exploration_sim_planner/util/EigenUtil.hpp"
+#include "exploration_sim_planner/util/OgmView.hpp"
 #include "exploration_sim_planner/util/UnionFind.hpp"
 
 #define OGM_OCCUPIED 100

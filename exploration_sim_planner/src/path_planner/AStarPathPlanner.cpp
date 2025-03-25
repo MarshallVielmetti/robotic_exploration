@@ -7,6 +7,7 @@
 
 #include "Eigen/src/Core/Matrix.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav_msgs/msg/path.hpp
 
 nav_msgs::msg::Path AStarPathPlanner::operator()(
     const geometry_msgs::msg::PoseStamped::SharedPtr goal,

@@ -33,32 +33,72 @@ find_package(exploration_sim_msgs REQUIRED)
 # ament_target_dependencies(path_planner rclcpp nav_msgs geometry_msgs Eigen3)
 # target_include_directories(path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-add_executable(pose_listener src/PoseTransformListenerNode.cpp)
+# Compile Shared Utility Library
+add_library(exploration_sim_planner_util SHARED
+  src/util/SimulatedAnnealingSolver.cpp
+)
+ament_target_dependencies(exploration_sim_planner_util std_msgs geometry_msgs nav_msgs exploration_sim_msgs Eigen3)
+target_link_libraries(exploration_sim_planner_util TBB::tbb)
+target_include_directories(exploration_sim_planner_util PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(pose_listener src/nodes/PoseTransformListenerNode.cpp)
 ament_target_dependencies(pose_listener rclcpp geometry_msgs tf2 tf2_ros Eigen3)
 target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
-add_executable(coverage_path_planner src/CoveragePathPlannerNode.cpp src/ConnectedComponentsLabeling.cpp src/util/SimulatedAnnealingSolver.cpp)
+# Compile Coverage Path Planner
+add_library(coverage_path_planner_lib SHARED
+  src/coverage_planner/ConnectedComponentsLabeling.cpp
+)
+ament_target_dependencies(coverage_path_planner_lib nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
+target_include_directories(coverage_path_planner_lib PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(coverage_path_planner src/nodes/CoveragePathPlannerNode.cpp) 
 ament_target_dependencies(coverage_path_planner rclcpp nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
-target_link_libraries(coverage_path_planner TBB::tbb)
+target_link_libraries(coverage_path_planner TBB::tbb coverage_path_planner_lib exploration_sim_planner_util)
 target_include_directories(coverage_path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-add_executable(short_term_planner src/nodes/ShortTermPlannerNode.cpp src/ShortTermPathPlanner.cpp)
+# Compile short term planner
+add_library(short_term_planner_lib SHARED
+  src/short_term_planner/ShortTermPathPlanner.cpp
+)
+ament_target_dependencies(short_term_planner_lib nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
+target_include_directories(short_term_planner_lib PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(short_term_planner src/nodes/ShortTermPlannerNode.cpp)
 ament_target_dependencies(short_term_planner rclcpp nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
+target_link_libraries(short_term_planner short_term_planner_lib exploration_sim_planner_util)
 target_include_directories(short_term_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-add_executable(trajectory_tracker src/TrajectoryTrackerNode.cpp src/trajectory_tracker/PurePursuitTracker.cpp)
+# Compile trajectory tracker
+add_library(trajectory_tracker_lib SHARED
+  src/trajectory_tracker/PurePursuitTracker.cpp
+)
+ament_target_dependencies(trajectory_tracker_lib nav_msgs geometry_msgs Eigen3)
+target_include_directories(trajectory_tracker_lib PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(trajectory_tracker src/nodes/TrajectoryTrackerNode.cpp)
 ament_target_dependencies(trajectory_tracker rclcpp std_msgs nav_msgs geometry_msgs Eigen3)
+target_link_libraries(trajectory_tracker trajectory_tracker_lib exploration_sim_planner_util)
 target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-add_executable(diff_drive_controller src/DiffDriveController.cpp)
+# Compile Differential Drive Controller
+add_executable(diff_drive_controller src/nodes/DiffDriveControllerNode.cpp)
 ament_target_dependencies(diff_drive_controller rclcpp nav_msgs geometry_msgs std_msgs Eigen3)
 target_include_directories(diff_drive_controller PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
+## INSTALL LIBRARIES ##
+install(TARGETS 
+  exploration_sim_planner_util
+  coverage_path_planner_lib
+  short_term_planner_lib
+  trajectory_tracker_lib
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ## INSTALL TARGETS ##
 install(TARGETS 
-  path_planner
   pose_listener
   coverage_path_planner
   short_term_planner
