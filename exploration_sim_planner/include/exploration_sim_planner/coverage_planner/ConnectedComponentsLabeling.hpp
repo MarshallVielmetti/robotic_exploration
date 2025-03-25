@@ -25,6 +25,7 @@
 
 #include "Eigen/src/Core/Matrix.h"
 #include "Eigen/src/Core/util/Constants.h"
+#include "exploration_sim_planner/util/EigenUtil.hpp"
 #include "exploration_sim_planner/util/OgmView.hpp"
 
 enum class CellLabel {

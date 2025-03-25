@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+#include "exploration_sim_planner/util/EigenUtil.hpp"  // hash functions for eigen types
+
 template <typename State, typename Cost>
 class AStar {
  public:
