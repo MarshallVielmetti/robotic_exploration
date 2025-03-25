@@ -691,16 +691,27 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
     return 0.0;
   }
 
-  // helper function to check if a cell is valid to be considered in the
-  // exploration process -- restricted astar
+  using GridAstar = AStar<Eigen::Vector2i, double>;
+
+  GridAstar astar;
+  GridAstar::Heuristic h = [](const Eigen::Vector2i& a,
+                              const Eigen::Vector2i& b) {
+    return (a - b).norm();
+  };
+
+  GridAstar::NodeComparator comp = [](const GridAstar::Node& a,
+                                      const GridAstar::Node& b) {
+    return a.cost > b.cost;
+  };
+
+  static const std::array<Eigen::Vector2i, 8> offsets{
+      Eigen::Vector2i(-1, 0), Eigen::Vector2i(1, 0),   Eigen::Vector2i(0, -1),
+      Eigen::Vector2i(0, 1),  Eigen::Vector2i(-1, -1), Eigen::Vector2i(-1, 1),
+      Eigen::Vector2i(1, -1), Eigen::Vector2i(1, 1)};
+
+  // Implements the restricted part, used by get_neighbors
   std::function<bool(const Eigen::Vector2i)> is_valid_cell =
       [&](const Eigen::Vector2i cell) {
-        // check that the cell is in the map
-        if (cell.x() < 0 || cell.x() >= cell_labels.cols() || cell.y() < 0 ||
-            cell.y() >= cell_labels.rows()) {
-          return false;
-        }
-
         // check that the cell is the same type as the start OR goal
         if (cell_labels(cell.y(), cell.x()) !=
                 cell_labels(start.y(), start.x()) &&
@@ -729,54 +740,45 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
         return in_start_sector || in_goal_sector;
       };
 
-  PathPlannerUtil::PqNodeCompare comparator(goal);
+  GridAstar::GetNeighbors get_neighbors =
+      [&cell_labels, &is_valid_cell](const Eigen::Vector2i& cell) {
+        std::vector<GridAstar::Node> neighbors;
 
-  std::priority_queue<std::shared_ptr<PathPlannerUtil::PqNode>,
-                      std::vector<std::shared_ptr<PathPlannerUtil::PqNode>>,
-                      PathPlannerUtil::PqNodeCompare>
-      open_set(comparator);
+        for (auto& offset : offsets) {
+          Eigen::Vector2i neighbor = cell + offset;
 
-  std::unordered_map<Eigen::Vector2i, std::shared_ptr<PathPlannerUtil::PqNode>>
-      closed_set;
+          if (neighbor.x() < 0 || neighbor.x() >= cell_labels.cols() ||
+              neighbor.y() < 0 || neighbor.y() >= cell_labels.rows()) {
+            continue;
+          }
 
-  open_set.push(std::make_shared<PathPlannerUtil::PqNode>(start, 0, nullptr));
+          if (!is_valid_cell(neighbor)) {
+            continue;
+          }
 
-  while (!open_set.empty()) {
-    auto curr = open_set.top();
-    open_set.pop();
+          auto label = cell_labels(neighbor.y(), neighbor.x());
 
-    // check if goal reached, if so return cost
-    if (curr->cell == goal) {
-      return curr->g;
-    }
+          // only search through safe and unknown cells
+          if (label != CellLabel::SAFE_FREE && label != CellLabel::UNKNOWN) {
+            continue;
+          }
 
-    // if this cell has already been visited with a lower cost, then just
-    // continue
-    if (closed_set.contains(curr->cell) &&
-        closed_set[curr->cell]->g <= curr->g) {
-      continue;
-    }
+          double cost = offset.norm() == 1 ? 1.0 : 1.414;
+          cost = (label == CellLabel::SAFE_FREE) ? cost : cost * UNKNOWN_ALPHA;
 
-    closed_set[curr->cell] = curr;
+          neighbors.push_back(GridAstar::Node{neighbor, cost});
+        }
 
-    auto valid_neighbors = ConnectedComponentsLabeling::get_valid_neighbors(
-        curr->cell, is_valid_cell);
+        return neighbors;
+      };
 
-    for (auto& neighbor : valid_neighbors) {
-      double g = curr->g + 1;
+  auto res = astar.find_path(start, goal, get_neighbors, h, comp);
 
-      // check if the neighbor cell is already in the closed set
-      if (closed_set.contains(neighbor) && closed_set[neighbor]->g <= g) {
-        continue;
-      }
-
-      // add to the open set
-      open_set.push(
-          std::make_shared<PathPlannerUtil::PqNode>(neighbor, g, curr));
-    }
+  if (!res.has_value()) {
+    return std::nullopt;
   }
 
-  return std::nullopt;
+  return res.value().second;
 };
 
 std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::get_valid_neighbors(
