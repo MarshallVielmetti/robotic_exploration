@@ -8,17 +8,18 @@
  * @see ConnectedComponentsLabeling.hpp
  */
 
-#include "exploration_sim_planner/CoveragePathPlannerNode.hpp"
+#include "exploration_sim_planner/nodes/CoveragePathPlannerNode.hpp"
 
 #include <rclcpp/logging.hpp>
 
-#include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
+#include "exploration_sim_planner/coverage_planner/ConnectedComponentsLabeling.hpp"
 #include "exploration_sim_planner/util/MsgUtil.hpp"
+#include "nav_msgs/msg/path.hpp"
 
 #define DEBUG_MODE 1
 
 CoveragePathPlannerNode::CoveragePathPlannerNode()
-    : Node("coverage_path_planner"), connected_components_util_(10, 1) {
+    : Node("coverage_path_planner"), connected_components_util_(20, 3) {
   RCLCPP_INFO(get_logger(),
               "Coverage Path Planner Node has started, configured with sector "
               "size %d and safe distance %d.",
@@ -29,6 +30,11 @@ CoveragePathPlannerNode::CoveragePathPlannerNode()
       "map", 10,
       std::bind(&CoveragePathPlannerNode::map_callback, this,
                 std::placeholders::_1));
+
+  pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
+      "pose", 10, [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+        this->robot_pose_ = *msg;
+      });
 
   // Create a publisher for the connectivity graph
   graph_pub_ = create_publisher<exploration_sim_msgs::msg::ConnectivityGraph>(
@@ -41,6 +47,10 @@ CoveragePathPlannerNode::CoveragePathPlannerNode()
 
   frontier_pub_ = create_publisher<exploration_sim_msgs::msg::FrontierClusters>(
       "frontier_clusters", 10);
+
+  path_pub_ = create_publisher<nav_msgs::msg::Path>("path", 10);
+
+  tsp_solver_ = std::make_unique<SimulatedAnnealingSolver>(500000, 0.9995);
 }
 
 void CoveragePathPlannerNode::map_callback(
@@ -103,6 +113,47 @@ void CoveragePathPlannerNode::map_callback(
       connected_components_util_.compute_incremental_connectivity_graph(
           cell_labels, centers);
 
+  auto active_zone_viewpoints =
+      connected_components_util_.find_viewpoint_representatives(
+          zones, frontier_viewpoints);
+
+  Eigen::Vector2d world_position{this->robot_pose_.pose.position.x,
+                                 this->robot_pose_.pose.position.y};
+  Eigen::Vector2d current_position =
+      ogm_view->world_to_cell(world_position).cast<double>();
+
+  auto [target_positions, cost_matrix] =
+      connected_components_util_.compute_atsp_cost_matrix(
+          graph, active_zone_viewpoints, cell_labels, zones, current_position);
+
+  // now solve the ATSP using the cost matrix
+  auto tsp_solution = tsp_solver_->solve(cost_matrix);
+
+  // convert the solution to a path in the map frame
+  std::vector<Eigen::Vector2d> path(tsp_solution.size());
+
+  nav_msgs::msg::Path path_msg;
+  path_msg.poses =
+      std::vector<geometry_msgs::msg::PoseStamped>(tsp_solution.size());
+
+  std::transform(
+      tsp_solution.begin(), tsp_solution.end(), path_msg.poses.begin(),
+      [&target_positions, &ogm_view, &msg](uint32_t i) {
+        auto global_loc = ogm_view->cell_to_world(target_positions[i].position);
+        geometry_msgs::msg::PoseStamped pose;
+        pose.pose.position.x = global_loc.x();
+        pose.pose.position.y = global_loc.y();
+        pose.pose.orientation.w = 1.0;
+        pose.header = msg->header;
+        return pose;
+      });
+
+  path_msg.header = msg->header;
+
+  // This is the primary purpose of this node -- to publish a global coverage
+  // path
+  path_pub_->publish(path_msg);
+
   // Use the OgmView to modify the locations of the centers to be global
   // coordinates instead of relative to the OGM
   std::transform(graph.nodes.begin(), graph.nodes.end(), graph.nodes.begin(),
@@ -112,7 +163,6 @@ void CoveragePathPlannerNode::map_callback(
 
   // Publish the connectivity graph
   auto graph_msg = msg_util::graph_to_msg(graph);
-
   graph_pub_->publish(graph_msg);
 }
 

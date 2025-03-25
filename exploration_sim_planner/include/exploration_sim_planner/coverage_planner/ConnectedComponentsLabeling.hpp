@@ -41,17 +41,27 @@ struct Edge {
   double cost;
 };
 
+enum class LocationType {
+  VIEWPOINT_CENTER,
+  UNKNOWN_ZONE_CENTER,
+  ROBOT_POSITION
+};
+struct TargetPosition {
+  Eigen::Vector2d position;  // location of the target
+  LocationType type;         // type of the location
+  uint32_t zone_id;          // id of the zone the target belongs to
+};
+
 struct ConnectivityGraph {
   ConnectivityGraph(std::vector<Eigen::Vector2d> the_nodes) : nodes(the_nodes) {
-    edges = Eigen::Matrix<Edge, Eigen::Dynamic, Eigen::Dynamic>(nodes.size(),
-                                                                nodes.size());
+    edges = Eigen::MatrixX<Edge>(nodes.size(), nodes.size());
     edges.setConstant(Edge{EdgeType::INVALID, 0.0});
   }
 
   std::vector<Eigen::Vector2d> nodes;  // centers of zones
 
   // connectivity graph
-  Eigen::Matrix<Edge, Eigen::Dynamic, Eigen::Dynamic> edges;
+  Eigen::MatrixX<Edge> edges;
 
   void add_edge(uint32_t i, uint32_t j, EdgeType type, double cost) {
     Edge edge(type, cost);
@@ -232,6 +242,23 @@ class ConnectedComponentsLabeling {
           cell_labels,
       const std::vector<Eigen::Vector2d>& centers);
 
+  // std::vector<std::vector<Eigen::Vector2d>> find_viewpoint_representatives(
+  //     const Eigen::MatrixX<CellLabel>& cell_labels,
+  //     const Eigen::MatrixX<uint32_t>& zones,
+  //     const std::vector<std::vector<Eigen::Vector2d>>& frontier_viewpoints);
+
+  std::pair<std::vector<TargetPosition>, Eigen::MatrixXd>
+  compute_atsp_cost_matrix(const ConnectivityGraph& graph,
+                           const std::vector<std::vector<Eigen::Vector2d>>&
+                               viewpoint_representatives,
+                           const Eigen::MatrixX<CellLabel>& cell_labels,
+                           const Eigen::MatrixX<uint32_t>& zones,
+                           const Eigen::Vector2d& current_position);
+
+  std::vector<std::vector<Eigen::Vector2d>> find_viewpoint_representatives(
+      const Eigen::MatrixX<uint32_t>& zones,
+      const std::vector<std::vector<Eigen::Vector2d>>& frontier_viewpoints);
+
  private:
   // Get the label of a cell
   CellLabel get_cell_label(const OgmView& ogm, uint32_t x, uint32_t y);
@@ -367,6 +394,14 @@ class ConnectedComponentsLabeling {
       const Eigen::MatrixX<CellLabel>& cell_labels);
 
   /**
+   * @brief Computes rectified viewpoint representatives for frontier cluster
+   *
+   * Viewpoint centers are computed as the average position of all viewpoint
+   * representatives within the zone (for that specific frontier)
+   */
+  // Eigen::Vector2d compute_viewpoint_representative();
+
+  /**
    * @brief Removes isolated subcomponents from the connectivity graph.
    *
    * Removes any subcomponents from the graph which consist only of isolated
@@ -379,6 +414,12 @@ class ConnectedComponentsLabeling {
       ConnectivityGraph& graph,
       const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
           cell_labels);
+
+  double grid_astar(Eigen::Vector2d& start, Eigen::Vector2d& goal,
+                    const Eigen::MatrixX<CellLabel>& cell_labels);
+
+  double graph_astar(uint32_t start_node, uint32_t end_node,
+                     const ConnectivityGraph& graph);
 
  private:
   // The size of the sectors in the map

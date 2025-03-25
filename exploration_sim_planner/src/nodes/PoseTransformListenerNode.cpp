@@ -1,4 +1,4 @@
-#include "exploration_sim_planner/PoseTransformListenerNode.hpp"
+#include "exploration_sim_planner/nodes/PoseTransformListenerNode.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 

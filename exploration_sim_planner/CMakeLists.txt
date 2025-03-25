@@ -29,23 +29,31 @@ find_package(exploration_sim_msgs REQUIRED)
 # include_directories(${TORCH_INCLUDE_DIRS})
 # target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
 
-add_executable(path_planner src/PathPlannerNode.cpp src/path_planner/AStarPathPlanner.cpp)
-ament_target_dependencies(path_planner rclcpp nav_msgs geometry_msgs Eigen3)
-target_include_directories(path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
+# add_executable(path_planner src/PathPlannerNode.cpp src/path_planner/AStarPathPlanner.cpp)
+# ament_target_dependencies(path_planner rclcpp nav_msgs geometry_msgs Eigen3)
+# target_include_directories(path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 add_executable(pose_listener src/PoseTransformListenerNode.cpp)
 ament_target_dependencies(pose_listener rclcpp geometry_msgs tf2 tf2_ros Eigen3)
 target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
-add_executable(coverage_path_planner src/CoveragePathPlannerNode.cpp src/ConnectedComponentsLabeling.cpp)
+add_executable(coverage_path_planner src/CoveragePathPlannerNode.cpp src/ConnectedComponentsLabeling.cpp src/util/SimulatedAnnealingSolver.cpp)
 ament_target_dependencies(coverage_path_planner rclcpp nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
 target_link_libraries(coverage_path_planner TBB::tbb)
 target_include_directories(coverage_path_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-# add_executable(trajectory_tracker src/TrajectoryTrackerNode.cpp src/trajectory_tracker/MPPITrajectoryTracker.cpp)
-# ament_target_dependencies(trajectory_tracker rclcpp nav_msgs geometry_msgs Eigen3 Torch)
-# target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/include)
+add_executable(short_term_planner src/nodes/ShortTermPlannerNode.cpp src/ShortTermPathPlanner.cpp)
+ament_target_dependencies(short_term_planner rclcpp nav_msgs geometry_msgs Eigen3 exploration_sim_msgs)
+target_include_directories(short_term_planner PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(trajectory_tracker src/TrajectoryTrackerNode.cpp src/trajectory_tracker/PurePursuitTracker.cpp)
+ament_target_dependencies(trajectory_tracker rclcpp std_msgs nav_msgs geometry_msgs Eigen3)
+target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(diff_drive_controller src/DiffDriveController.cpp)
+ament_target_dependencies(diff_drive_controller rclcpp nav_msgs geometry_msgs std_msgs Eigen3)
+target_include_directories(diff_drive_controller PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
 ## INSTALL TARGETS ##
@@ -53,6 +61,9 @@ install(TARGETS
   path_planner
   pose_listener
   coverage_path_planner
+  short_term_planner
+  trajectory_tracker
+  diff_drive_controller
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -61,6 +61,9 @@ class FitSplines(Node):
       pose.header = msg.header
       pose.pose.position.x = xx[i]
       pose.pose.position.y = yy[i]
+
+      pose.pose.o
+
       spline_path.poses.append(pose)
 
     self.path_publisher_.publish(spline_path)

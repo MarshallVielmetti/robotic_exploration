@@ -13,7 +13,7 @@
 #include "exploration_sim_msgs/msg/edge.hpp"
 #include "exploration_sim_msgs/msg/frontier_clusters.hpp"
 #include "exploration_sim_msgs/msg/point2d.hpp"
-#include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
+#include "exploration_sim_planner/coverage_planner/ConnectedComponentsLabeling.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 
 namespace msg_util {
@@ -120,14 +120,6 @@ inline exploration_sim_msgs::msg::FrontierClusters frontier_clusters_to_msg(
 
     msg.clusters.push_back(frontier_cluster);
   }
-
-  // for (const auto& cluster : clusters) {
-  //   exploration_sim_msgs::msg::FrontierCluster frontier_cluster;
-  //   for (const auto& point : cluster) {
-  //     frontier_cluster.points.push_back(to_point2d(point.cast<double>()));
-  //   }
-  //   msg.clusters.push_back(frontier_cluster);
-  // }
 
   return msg;
 }

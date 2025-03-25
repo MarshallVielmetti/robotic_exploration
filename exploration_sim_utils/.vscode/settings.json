@@ -12,5 +12,6 @@
     "/home/marshallvielmetti/ros2_ws/build_clang/exploration_sim_utils",
     "/home/marshallvielmetti/ros2_ws/install_clang/exploration_sim_utils/lib/python3.12/site-packages",
     "/opt/ros/jazzy/lib/python3.12/site-packages"
-  ]
+  ],
+  "editor.formatOnSave": true,
 }

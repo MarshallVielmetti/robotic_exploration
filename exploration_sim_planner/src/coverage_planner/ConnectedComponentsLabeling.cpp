@@ -4,18 +4,22 @@
  * ConnectedComponentsLabeling.hpp.
  */
 
-#include "exploration_sim_planner/ConnectedComponentsLabeling.hpp"
+#include "exploration_sim_planner/coverage_planner/ConnectedComponentsLabeling.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <execution>
+#include <iostream>
 #include <iterator>
 #include <queue>
 #include <unordered_map>
+#include <utility>
 
 #include "Eigen/src/Core/Matrix.h"
 #include "Eigen/src/Core/util/Constants.h"
 #include "exploration_sim_planner/path_planner/AStarPathPlanner.hpp"
+#include "exploration_sim_planner/util/AStar.hpp"
 #include "exploration_sim_planner/util/UnionFind.hpp"
 
 #define OGM_OCCUPIED 100
@@ -30,6 +34,9 @@
 #define RAYCAST_RESOLUTION 0.1
 
 #define N_VIEW_MAX 8
+
+#define D_THR 15
+#define UNKNOWN_ALPHA 1.5f  // multiplier for unknown cells
 
 /**
  * Definition of terms used
@@ -890,4 +897,246 @@ void ConnectedComponentsLabeling::filter_isolated_subcomponents(
 
   // replace the original graph with the modified one
   graph = std::move(new_graph);
+}
+
+std::vector<std::vector<Eigen::Vector2d>>
+ConnectedComponentsLabeling::find_viewpoint_representatives(
+    const Eigen::MatrixX<uint32_t>& zones,
+    const std::vector<std::vector<Eigen::Vector2d>>& frontier_viewpoints) {
+  std::vector<std::vector<Eigen::Vector2d>> viewpoint_representatives;
+  viewpoint_representatives.resize(frontier_viewpoints.size());
+
+  // loop through every frontier
+  for (size_t i = 0; i < frontier_viewpoints.size(); i++) {
+    // map from zone id to the viewpoints of this frontier in that zone
+    std::unordered_map<uint32_t, std::vector<Eigen::Vector2d>> zone_viewpoints;
+    for (const auto& viewpoint : frontier_viewpoints[i]) {
+      Eigen::Vector2i viewpoint_i = viewpoint.cast<int>();
+      uint32_t zone_id = zones(viewpoint_i.y(), viewpoint_i.x());
+
+      if (zone_viewpoints.find(zone_id) == zone_viewpoints.end()) {
+        zone_viewpoints[zone_id] = std::vector<Eigen::Vector2d>();
+      }
+
+      zone_viewpoints[zone_id].push_back(viewpoint);
+    }
+
+    // find the viewpoint center for each zone
+    for (const auto& [zone_id, viewpoints] : zone_viewpoints) {
+      // average out the viewpoints to get the center
+      Eigen::Vector2d center = Eigen::Vector2d::Zero();
+      for (const auto& viewpoint : viewpoints) {
+        center += viewpoint;
+      }
+      center /= viewpoints.size();
+
+      // add representative to the list corresponding to that zone
+      viewpoint_representatives[i].push_back(center);
+    }
+  }
+
+  return viewpoint_representatives;
+}
+
+std::pair<std::vector<TargetPosition>, Eigen::MatrixXd>
+ConnectedComponentsLabeling::compute_atsp_cost_matrix(
+    const ConnectivityGraph& graph,
+    const std::vector<std::vector<Eigen::Vector2d>>& viewpoint_representatives,
+    const Eigen::MatrixX<CellLabel>& cell_labels,
+    const Eigen::MatrixX<uint32_t>& zones,
+    const Eigen::Vector2d& current_position) {
+  std::vector<TargetPosition> target_positions;
+
+  // add all unkwnown zone centers to the target positions
+  for (auto& node : graph.nodes) {
+    Eigen::Vector2i cell = node.cast<int>();
+    if (cell_labels(cell.y(), cell.x()) == CellLabel::UNKNOWN) {
+      auto zone_id = zones(cell.y(), cell.x());
+      target_positions.push_back(
+          TargetPosition{node, LocationType::UNKNOWN_ZONE_CENTER, zone_id});
+    }
+  }
+
+  // add all viewpoint representatives to the target positions
+  for (auto& frontier : viewpoint_representatives) {
+    for (auto& vp : frontier) {
+      Eigen::Vector2i cell = vp.cast<int>();
+      auto zone_id = zones(cell.y(), cell.x());
+      target_positions.push_back(
+          TargetPosition{vp, LocationType::VIEWPOINT_CENTER, zone_id});
+    }
+  }
+
+  // sort by zone_id just because
+  std::sort(target_positions.begin(), target_positions.end(),
+            [](const TargetPosition& tp1, const TargetPosition& tp2) {
+              return tp1.zone_id < tp2.zone_id;
+            });
+
+  // add the current position as the last element
+  target_positions.push_back(
+      TargetPosition{current_position, LocationType::ROBOT_POSITION, 0});
+
+  // we consider zone centers of unknown zones and viewpoint centers of active
+  // free zones
+
+  // initialize the cost matrix
+  Eigen::MatrixXd cost_matrix(target_positions.size(), target_positions.size());
+  cost_matrix.setZero();
+
+  // loop through every pair of target positions
+  for (uint32_t row = 0; row < target_positions.size(); row++) {
+    for (uint32_t col = row + 1; col < target_positions.size(); col++) {
+      // if the two target positions are the same, the cost is 0
+      if (target_positions[row].position == target_positions[col].position) {
+        cost_matrix(row, col) = 0;
+        cost_matrix(col, row) = 0;
+        continue;
+      }
+
+      // if the distance is less than some threshold, use a grid-based A* search
+      // for distance
+      double distance =
+          (target_positions[row].position - target_positions[col].position)
+              .norm();
+
+      double cost;
+      if (distance < D_THR) {
+        cost = grid_astar(target_positions[row].position,
+                          target_positions[col].position, cell_labels);
+      } else {
+        // find two nodes in the graph closed so the target positions
+        uint32_t start_node;
+        double min_start_dist = std::numeric_limits<double>::infinity();
+        uint32_t end_node;
+        double min_end_dist = std::numeric_limits<double>::infinity();
+
+        for (auto& node : graph.nodes) {
+          double dist = (node - target_positions[row].position).norm();
+          if (dist < min_start_dist) {
+            start_node = &node - &graph.nodes[0];
+            min_start_dist = dist;
+          }
+
+          dist = (node - target_positions[col].position).norm();
+          if (dist < min_end_dist) {
+            end_node = &node - &graph.nodes[0];
+            min_end_dist = dist;
+          }
+        }
+
+        cost = graph_astar(start_node, end_node, graph);
+      }
+
+      // set both (symmetric matrix)
+      cost_matrix(row, col) = cost;
+      cost_matrix(col, row) = cost;
+    }
+  }
+
+  // now to make the asymmetric, set the cost from any point to the robot
+  // position to be zero -- this will create an open loop tour
+  for (uint32_t i = 0; i < target_positions.size() - 1; i++) {
+    cost_matrix(i, target_positions.size() - 1) = 0;
+  }
+
+  return std::make_pair(target_positions, cost_matrix);
+}
+
+double ConnectedComponentsLabeling::grid_astar(
+    Eigen::Vector2d& start, Eigen::Vector2d& goal,
+    const Eigen::MatrixX<CellLabel>& cell_labels) {
+  using GridAstar = AStar<Eigen::Vector2i, double>;
+
+  auto start_i = start.cast<int>();
+  auto goal_i = goal.cast<int>();
+
+  GridAstar astar;
+
+  GridAstar::Heuristic h = [](const Eigen::Vector2i& a,
+                              const Eigen::Vector2i& b) {
+    return (a - b).norm();
+  };
+
+  GridAstar::NodeComparator comp = [](const GridAstar::Node& a,
+                                      const GridAstar::Node& b) {
+    return a.cost > b.cost;
+  };
+
+  static const std::array<Eigen::Vector2i, 8> offsets{
+      Eigen::Vector2i(-1, 0), Eigen::Vector2i(1, 0),   Eigen::Vector2i(0, -1),
+      Eigen::Vector2i(0, 1),  Eigen::Vector2i(-1, -1), Eigen::Vector2i(-1, 1),
+      Eigen::Vector2i(1, -1), Eigen::Vector2i(1, 1)};
+
+  GridAstar::GetNeighbors get_neighbors =
+      [&cell_labels](const Eigen::Vector2i& cell) {
+        std::vector<GridAstar::Node> neighbors;
+
+        for (auto& offset : offsets) {
+          Eigen::Vector2i neighbor = cell + offset;
+
+          if (neighbor.x() < 0 || neighbor.x() >= cell_labels.cols() ||
+              neighbor.y() < 0 || neighbor.y() >= cell_labels.rows()) {
+            continue;
+          }
+
+          auto label = cell_labels(neighbor.y(), neighbor.x());
+
+          // only search through safe and unknown cells
+          if (label != CellLabel::SAFE_FREE && label != CellLabel::UNKNOWN) {
+            continue;
+          }
+
+          double cost = offset.norm() == 1 ? 1.0 : 1.414;
+          cost = (label == CellLabel::SAFE_FREE) ? cost : cost * UNKNOWN_ALPHA;
+
+          neighbors.push_back(GridAstar::Node{neighbor, cost});
+        }
+
+        return neighbors;
+      };
+
+  auto result = astar.find_path(start_i, goal_i, get_neighbors, h, comp);
+
+  if (!result.has_value()) {
+    return std::numeric_limits<double>::infinity();
+  }
+
+  return result.value().second;
+}
+
+double ConnectedComponentsLabeling::graph_astar(
+    uint32_t start_node, uint32_t end_node, const ConnectivityGraph& graph) {
+  using GraphAstar = AStar<uint32_t, double>;
+  GraphAstar astar;
+
+  GraphAstar::Heuristic h = [&graph](const uint32_t& a, const uint32_t& b) {
+    return (graph.nodes[a] - graph.nodes[b]).norm();
+  };
+
+  GraphAstar::NodeComparator comp = [](const GraphAstar::Node& a,
+                                       const GraphAstar::Node& b) {
+    return a.cost > b.cost;
+  };
+
+  GraphAstar::GetNeighbors get_neighbors = [&graph](const uint32_t& node) {
+    std::vector<GraphAstar::Node> neighbors;
+
+    for (uint32_t i = 0; i < graph.nodes.size(); i++) {
+      if (graph.edges(node, i).type != EdgeType::INVALID) {
+        neighbors.push_back(GraphAstar::Node{i, graph.edges(node, i).cost});
+      }
+    }
+
+    return neighbors;
+  };
+
+  auto result = astar.find_path(start_node, end_node, get_neighbors, h, comp);
+
+  if (!result.has_value()) {
+    std::cerr << "Failed to find a path using A* graph search" << std::endl;
+    return std::numeric_limits<double>::infinity();
+  }
+
+  return result.value().second;
 }

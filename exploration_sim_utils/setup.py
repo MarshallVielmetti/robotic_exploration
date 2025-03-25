@@ -24,6 +24,7 @@ setup(
             'path_grapher = exploration_sim_utils.PathGrapher:main',
             'fit_splines = exploration_sim_utils.FitSplines:main',
             'connectivity_graph_plotter = exploration_sim_utils.ConnectivityGraphPlotter:main',
+            'save_map = exploration_sim_utils.SaveMap:main',
         ],
     },
 )
