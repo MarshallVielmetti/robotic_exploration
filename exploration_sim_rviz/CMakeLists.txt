@@ -15,9 +15,10 @@ find_package(exploration_sim_msgs REQUIRED)
 set(CMAKE_AUTOMOC ON)
 qt5_wrap_cpp(MOC_FILES
   include/exploration_sim_rviz/frontier_display.hpp
+  include/exploration_sim_rviz/connectivity_graph_display.hpp
 )
 
-add_library(frontier_display src/frontier_display.cpp ${MOC_FILES})
+add_library(frontier_display src/frontier_display.cpp src/connectivity_graph_display.cpp ${MOC_FILES})
 target_include_directories(frontier_display PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -28,7 +29,18 @@ ament_target_dependencies(frontier_display
   exploration_sim_msgs
 )
 
-install(TARGETS frontier_display
+# add_library(connectivity_graph_display src/connectivity_graph_display.cpp ${MOC_FILES})
+# target_include_directories(connectivity_graph_display PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include>)
+
+# ament_target_dependencies(connectivity_graph_display
+#   pluginlib
+#   rviz_common
+#   exploration_sim_msgs
+# )
+
+install(TARGETS frontier_display 
   EXPORT export_exploration_sim_rviz
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

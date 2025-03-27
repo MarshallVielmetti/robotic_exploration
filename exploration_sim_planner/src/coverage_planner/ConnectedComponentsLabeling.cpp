@@ -763,7 +763,7 @@ std::optional<double> ConnectedComponentsLabeling::restricted_astar(
             continue;
           }
 
-          double cost = offset.norm() == 1 ? 1.0 : 1.414;
+          double cost = offset.cast<double>().norm();
           cost = (label == CellLabel::SAFE_FREE) ? cost : cost * UNKNOWN_ALPHA;
 
           neighbors.push_back(GridAstar::Node{neighbor, cost});
@@ -1090,7 +1090,7 @@ double ConnectedComponentsLabeling::grid_astar(
             continue;
           }
 
-          double cost = offset.norm() == 1 ? 1.0 : 1.414;
+          double cost = offset.cast<double>().norm();
           cost = (label == CellLabel::SAFE_FREE) ? cost : cost * UNKNOWN_ALPHA;
 
           neighbors.push_back(GridAstar::Node{neighbor, cost});

@@ -20,13 +20,15 @@ class PurePursuitTracker : public AbstractTrajectoryTracker {
    *
    * @param path The path to follow
    * @param current_position The current position of the robot
+   * @param current_heading The current heading of the robot in radians
    * @param lookahead_distance The distance ahead of the robot to look for the
    * target point
    * @return The steering angle in radians
    */
-  static double compute_steering_angle(const std::vector<Eigen::Vector2d>& path,
-                                       const Eigen::Vector2d& current_position,
-                                       double lookahead_distance);
+  static std::pair<double, Eigen::Vector2d> compute_steering_angle(
+      const std::vector<Eigen::Vector2d>& path,
+      const Eigen::Vector2d& current_position, double current_heading,
+      double lookahead_distance);
 
   /**
    * @brief Compute the target point for the robot to follow the path

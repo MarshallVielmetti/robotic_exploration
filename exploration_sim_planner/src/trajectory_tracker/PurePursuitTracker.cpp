@@ -8,18 +8,32 @@
 
 #include <limits>
 
+#define WHEELBASE 1.0f
+
 PurePursuitTracker::~PurePursuitTracker() {}
 
-double PurePursuitTracker::compute_steering_angle(
+std::pair<double, Eigen::Vector2d> PurePursuitTracker::compute_steering_angle(
     const std::vector<Eigen::Vector2d> &path,
-    const Eigen::Vector2d &current_position, double lookahead_distance) {
+    const Eigen::Vector2d &current_position, double current_heading,
+    double lookahead_distance) {
   // Find the target point
   auto target_point =
       compute_target_point(path, current_position, lookahead_distance);
 
-  // Compute the steering angle
-  auto diff = target_point - current_position;
-  return std::atan2(diff.y(), diff.x());
+  double dx = target_point.x() - current_position.x();
+  double dy = target_point.y() - current_position.y();
+
+  // double target_x_local =
+  //     dx * cos(-current_heading) - dy * sin(-current_heading);
+  double target_y_local =
+      dx * sin(-current_heading) + dy * cos(-current_heading);
+
+  double curvature =
+      2.0 * target_y_local / (lookahead_distance * lookahead_distance);
+
+  double steering_angle = atan(WHEELBASE * curvature);
+
+  return std::make_pair(steering_angle, target_point);
 }
 
 Eigen::Vector2d PurePursuitTracker::compute_target_point(
@@ -40,17 +54,16 @@ Eigen::Vector2d PurePursuitTracker::compute_target_point(
 
   // Find the target point by sampling points further along the path until
   // the lookahead distance is reached
-  Eigen::Vector2d best_lookahead = closest_point;
-  double best_distance = lookahead_distance;
+  double path_distance = 0.0;
 
   for (size_t i = point_index + 1; i < path.size(); i++) {
-    auto cand = path[i];
-    double diff = (cand - current_position).norm() - lookahead_distance;
-    if (diff < best_distance) {
-      best_distance = diff;
-      best_lookahead = cand;
+    path_distance += (path[i] - path[i - 1]).norm();
+    if (path_distance > lookahead_distance) {
+      return path[i];
     }
   }
 
-  return best_lookahead;
+  // If the lookahead distance is greater than the path length, return the last
+  // point on the path
+  return path.back();
 }

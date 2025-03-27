@@ -31,17 +31,10 @@ ShortTermPlannerNode::ShortTermPlannerNode() : Node("short_term_planner_node") {
   committed_path_pub_ =
       this->create_publisher<nav_msgs::msg::Path>("committed_path", 10);
 
-  committed_path_timer_ = this->create_wall_timer(5s, [this]() {
+  committed_path_timer_ = this->create_wall_timer(10s, [this]() {
     RCLCPP_INFO(this->get_logger(), "Replanning committed path");
-    this->committed_path_ = current_candidate_;
-
-    for (auto &pose : committed_path_.poses) {
-      pose.header.stamp = rclcpp::Clock().now();
-    }
-
-    this->committed_path_.header.stamp = rclcpp::Clock().now();
-
-    committed_path_pub_->publish(committed_path_);
+    this->committed_path_ = std::move(current_candidate_);
+    this->committed_path_pub_->publish(this->committed_path_);
   });
 
   safety_timer_ = this->create_wall_timer(0.1s, [this]() {

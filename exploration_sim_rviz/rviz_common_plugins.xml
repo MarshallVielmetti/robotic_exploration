@@ -2,4 +2,8 @@
   <class type="exploration_sim_rviz::FrontierDisplay" base_class_type="rviz_common::Display">
     <description>Displays frontier markers</description>
   </class>
+  <class type="exploration_sim_rviz::ConnectivityGraphDisplay"
+    base_class_type="rviz_common::Display">
+    <description>Displays connectivity graph markers</description>
+  </class>
 </library>

@@ -10,7 +10,7 @@
 #include <std_msgs/msg/float64.hpp>
 
 #include "exploration_sim_planner/trajectory_tracker/PurePursuitTracker.hpp"
-#include "nav_msgs/msg/occupancy_grid.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 
 class TrajectoryTrackerNode : public rclcpp::Node {
@@ -24,8 +24,10 @@ class TrajectoryTrackerNode : public rclcpp::Node {
   // members
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
-
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr steering_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr
+      lookahead_publisher_;
+  rclcpp::TimerBase::SharedPtr control_frequency_timer_;
 
   nav_msgs::msg::Path current_path_;
   geometry_msgs::msg::PoseStamped current_pose_;

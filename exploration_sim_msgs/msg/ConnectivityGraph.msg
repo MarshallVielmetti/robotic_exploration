@@ -1,4 +1,8 @@
 
+
+# required header
+std_msgs/Header header
+
 # This contains the position vectors of the nodes in the graph in the global frame
 exploration_sim_msgs/Point2d[] nodes
 

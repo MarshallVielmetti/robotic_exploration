@@ -20,9 +20,8 @@
 #include <optional>
 #include <vector>
 
+#include "exploration_sim_planner/util/BSplineUtil.hpp"
 #include "nav_msgs/msg/path.hpp"
-
-struct CubicBSpline {};
 
 class ShortTermPathPlanner {
  public:
@@ -60,10 +59,10 @@ class ShortTermPathPlanner {
       const Eigen::MatrixXd& esdf,
       const std::vector<Eigen::Vector2d>& global_path);
 
-  static CubicBSpline fit_cubic_bspline(
+  static BSplineUtil::CubicBSpline fit_cubic_bspline(
       const Eigen::MatrixXd& esdf,
       const std::vector<Eigen::Vector2i>& astar_path);
 
-  static std::vector<Eigen::Vector2d> sample_path(
-      const CubicBSpline& cubic_spline, size_t num_samples);
+  static std::vector<Eigen::Vector2d> shorten_path(
+      const std::vector<Eigen::Vector2d>& global_path, double max_length);
 };

@@ -8,53 +8,44 @@
 #include "exploration_sim_planner/short_term_planner/ShortTermPathPlanner.hpp"
 
 #include <Eigen/Dense>
+#include <iostream>
 #include <iterator>
 #include <optional>
 #include <vector>
 
+#include "Eigen/src/Core/Matrix.h"
 #include "exploration_sim_planner/util/AStar.hpp"
+#include "exploration_sim_planner/util/BSplineUtil.hpp"
+#include "exploration_sim_planner/util/EsdfUtil.hpp"
 
 #define SAFETY_THRESHOLD 3  // 3 cells
 
 std::vector<Eigen::Vector2d> ShortTermPathPlanner::fit_smoothed_path(
-    const Eigen::MatrixXd& esdf,
+    const Eigen::MatrixXd& ogm,
     const std::vector<Eigen::Vector2d>& global_path) {
-  // Only accept first 5 nodes along the global path
-  std::vector<Eigen::Vector2d> shortened_path;
-  shortened_path.reserve(5);
+  // Plan path of a maximum length of 40 cells (40 meters)
+  auto shortened_path = shorten_path(global_path, 40);
 
-  for (size_t i = 0; i < 5 && i < global_path.size(); i++) {
-    shortened_path.push_back(global_path[i]);
-  }
+  // Get an esdf from the ogm
+  auto esdf = EsdfUtil::computeEsdf(ogm, 20);
 
   // Fit an A* path to the shortened path
   auto astar_path = fit_astar(esdf, shortened_path);
 
+  // If unable to find a path, return an empty path
   if (!astar_path.has_value()) {
     return {};
   }
 
   // Fit a cubic b-spline to the A* path
-  // auto cubic_spline = fit_cubic_bspline(esdf, astar_path.value());
+  auto cubic_spline = fit_cubic_bspline(esdf, astar_path.value());
 
-  // TODO: Potentially incorporate an optimization layer here to
-  // improve the b-spline by descending the ESDF
-
-  // Sample points long the path -- maybe proportional to the total length of
-  // the path?
-  // auto path = sample_path(cubic_spline, 100);
-  std::vector<Eigen::Vector2d> path;
-
-  std::transform(astar_path.value().begin(), astar_path.value().end(),
-                 std::back_inserter(path), [](const Eigen::Vector2i& point) {
-                   return point.cast<double>();
-                 });
-
-  return path;
+  // Sample 100 points along the spline
+  return cubic_spline.sample(100);
 }
 
 std::optional<std::vector<Eigen::Vector2i>> ShortTermPathPlanner::fit_astar(
-    const Eigen::MatrixXd& ogm,
+    const Eigen::MatrixXd& esdf,
     const std::vector<Eigen::Vector2d>& global_path) {
   using EsdfAstar = AStar<Eigen::Vector2i, double>;
 
@@ -78,27 +69,27 @@ std::optional<std::vector<Eigen::Vector2i>> ShortTermPathPlanner::fit_astar(
     return a.cost > b.cost;
   };
 
-  EsdfAstar::GetNeighbors get_neighbor = [&ogm](const Eigen::Vector2i& cell) {
+  EsdfAstar::GetNeighbors get_neighbor = [&esdf](const Eigen::Vector2i& cell) {
     std::vector<EsdfAstar::Node> neighbors;
 
     for (auto& offset : offsets) {
       Eigen::Vector2i neighbor = cell + offset;
 
-      if (neighbor.x() < 0 || neighbor.x() >= ogm.cols() || neighbor.y() < 0 ||
-          neighbor.y() >= ogm.rows()) {
+      if (neighbor.x() < 0 || neighbor.x() >= esdf.cols() || neighbor.y() < 0 ||
+          neighbor.y() >= esdf.rows()) {
         continue;
       }
 
-      double esdf_value = ogm(neighbor.y(), neighbor.x());
+      double esdf_value = esdf(neighbor.y(), neighbor.x());
 
       // ONLY CONSIDER FREE CELLS -- TODO REPLACE WITH ESDF
-      if (esdf_value == 100) {
+      if (esdf_value <= SAFETY_THRESHOLD) {
         continue;
       }
 
-      double cost = offset.norm() == 1 ? 1.0 : 1.414;
+      double incremental_cost = offset.cast<double>().norm();
 
-      neighbors.push_back(EsdfAstar::Node{neighbor, cost});
+      neighbors.push_back(EsdfAstar::Node{neighbor, incremental_cost});
     }
 
     return neighbors;
@@ -124,12 +115,20 @@ std::optional<std::vector<Eigen::Vector2i>> ShortTermPathPlanner::fit_astar(
     // Extract results if successful
     auto [path, cost] = result.value();
 
+    // Path is empty... so who cares
+    if (path.empty() || path.size() == 1) {
+      continue;
+    }
+
     // Append the path to the astar path -- don't add the last point
     astar_path.insert(astar_path.end(), path.begin(), path.end() - 1);
   }
 
   // Add the last point (not added in for loop)
-  astar_path.push_back(waypoints.back());
+  if (waypoints.size() > 1) {
+    astar_path.push_back(waypoints.back());
+  }
+
   return astar_path;
 }
 
@@ -153,6 +152,52 @@ bool ShortTermPathPlanner::check_path_safety(const Eigen::MatrixXd& esdf,
   return true;
 }
 
-// CubicBSpline ShortTermPathPlanner::fit_cubic_bspline(
-//     const Eigen::MatrixXd& esdf,
-//     const std::vector<Eigen::Vector2i>& astar_path) {}
+BSplineUtil::CubicBSpline ShortTermPathPlanner::fit_cubic_bspline(
+    const Eigen::MatrixXd& esdf,
+    const std::vector<Eigen::Vector2i>& astar_path) {
+  std::vector<Eigen::Vector2d> path;
+  std::transform(
+      astar_path.begin(), astar_path.end(), std::back_inserter(path),
+      [](const Eigen::Vector2i& point) { return point.cast<double>(); });
+
+  // Initial B-spline fitting with moderate smoothness
+  auto spline = BSplineUtil::fitCubicBSpline(path, 0.8);
+
+  // Optimize the spline using gradient descent
+  // Balance safety (0.7) vs path length (0.3)
+  auto optimized_spline =
+      BSplineUtil::optimizeSpline(spline, esdf, 0.7, 0.3, 0.05, 50);
+
+  // If optimization failed to produce a safe path, fall back to the original
+  // spline
+  if (!BSplineUtil::checkSplineSafety(esdf, optimized_spline, 2.0)) {
+    // Try with less smoothing
+    spline = BSplineUtil::fitCubicBSpline(path, 0.1);
+
+    // Try optimization again with higher safety weight
+    optimized_spline =
+        BSplineUtil::optimizeSpline(spline, esdf, 0.9, 0.1, 0.03, 100);
+
+    // If still not safe, use minimal smoothing
+    if (!BSplineUtil::checkSplineSafety(esdf, optimized_spline, 1.5)) {
+      return BSplineUtil::fitCubicBSpline(path, 0.05);
+    }
+  }
+
+  return optimized_spline;
+}
+
+std::vector<Eigen::Vector2d> ShortTermPathPlanner::shorten_path(
+    const std::vector<Eigen::Vector2d>& global_path, double max_length) {
+  std::vector<Eigen::Vector2d> shortened_path;
+  double curr_length = 0.0;
+
+  shortened_path.push_back(global_path.front());
+
+  for (size_t i = 1; i < global_path.size() && curr_length < max_length; i++) {
+    curr_length += (global_path[i] - global_path[i - 1]).norm();
+    shortened_path.push_back(global_path[i]);
+  }
+
+  return shortened_path;
+}

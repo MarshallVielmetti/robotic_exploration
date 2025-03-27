@@ -8,6 +8,12 @@ const double DiffDriveController::CONTROL_FREQUENCY_SEC = 0.1;
 DiffDriveController::DiffDriveController() : Node("diff_drive_controller") {
   RCLCPP_INFO(this->get_logger(), "DiffDriveController node started");
 
+  // Subscribe to the angular control input
+  angular_sub_ = this->create_subscription<std_msgs::msg::Float64>(
+      "steering_angle", 10,
+      std::bind(&DiffDriveController::angular_callback, this,
+                std::placeholders::_1));
+
   // Create a publisher for the control commands
   cmd_vel_publisher_ =
       this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
@@ -25,11 +31,13 @@ DiffDriveController::DiffDriveController() : Node("diff_drive_controller") {
 
   // Initialize the velocity setpoint
   control_value_ = Eigen::Vector2d::Zero();
-  control_value_.x() = 0.5;  // default linear velocity
+  control_value_.x() = 1.5;  // default linear velocity
 }
 
 void DiffDriveController::angular_callback(const std_msgs::msg::Float64 msg) {
-  control_value_.y() = msg.data / 5.0;  // simple proportional controller
+  RCLCPP_INFO(this->get_logger(), "Received angular control input: %f",
+              msg.data);
+  control_value_.y() = msg.data * 2.0;  // simple proportional controller
 }
 
 void DiffDriveController::publish_velocity() {

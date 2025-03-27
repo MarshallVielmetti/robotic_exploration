@@ -16,7 +16,7 @@ PoseTransformListenerNode::PoseTransformListenerNode()
 
   // Create a timer to trigger the pose publishing
   timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(1000),
+      std::chrono::milliseconds(100),
       std::bind(&PoseTransformListenerNode::on_timer, this));
 }
 

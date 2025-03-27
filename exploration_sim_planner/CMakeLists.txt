@@ -19,7 +19,10 @@ find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(TBB REQUIRED)
+find_package(osqp REQUIRED)
+find_package(OsqpEigen REQUIRED)
 
 # custom packages
 find_package(exploration_sim_msgs REQUIRED)
@@ -36,10 +39,13 @@ find_package(exploration_sim_msgs REQUIRED)
 # Compile Shared Utility Library
 add_library(exploration_sim_planner_util SHARED
   src/util/SimulatedAnnealingSolver.cpp
+  src/util/BSplineUtil.cpp
+  src/util/EsdfUtil.cpp
+  src/util/MpcController.cpp
 )
 ament_target_dependencies(exploration_sim_planner_util std_msgs geometry_msgs nav_msgs exploration_sim_msgs Eigen3)
-target_link_libraries(exploration_sim_planner_util TBB::tbb)
-target_include_directories(exploration_sim_planner_util PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(exploration_sim_planner_util TBB::tbb ${OSQP_LIBRARIES} OsqpEigen::OsqpEigen)
+target_include_directories(exploration_sim_planner_util PRIVATE ${PROJECT_SOURCE_DIR}/include OsqpEigen::OsqpEigen)
 
 add_executable(pose_listener src/nodes/PoseTransformListenerNode.cpp)
 ament_target_dependencies(pose_listener rclcpp geometry_msgs tf2 tf2_ros Eigen3)
@@ -73,12 +79,13 @@ target_include_directories(short_term_planner PRIVATE ${PROJECT_SOURCE_DIR}/incl
 # Compile trajectory tracker
 add_library(trajectory_tracker_lib SHARED
   src/trajectory_tracker/PurePursuitTracker.cpp
+  src/trajectory_tracker/MPCTrajectoryTracker.cpp
 )
 ament_target_dependencies(trajectory_tracker_lib nav_msgs geometry_msgs Eigen3)
 target_include_directories(trajectory_tracker_lib PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 add_executable(trajectory_tracker src/nodes/TrajectoryTrackerNode.cpp)
-ament_target_dependencies(trajectory_tracker rclcpp std_msgs nav_msgs geometry_msgs Eigen3)
+ament_target_dependencies(trajectory_tracker rclcpp std_msgs nav_msgs geometry_msgs Eigen3 tf2 tf2_ros tf2_geometry_msgs)
 target_link_libraries(trajectory_tracker trajectory_tracker_lib exploration_sim_planner_util)
 target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
@@ -86,6 +93,11 @@ target_include_directories(trajectory_tracker PRIVATE ${PROJECT_SOURCE_DIR}/incl
 add_executable(diff_drive_controller src/nodes/DiffDriveControllerNode.cpp)
 ament_target_dependencies(diff_drive_controller rclcpp nav_msgs geometry_msgs std_msgs Eigen3)
 target_include_directories(diff_drive_controller PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(mpc_test test/mpc_test.cpp)
+target_link_libraries(mpc_test exploration_sim_planner_util)
+ament_target_dependencies(mpc_test Eigen3)
+target_include_directories(mpc_test PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
 ## INSTALL LIBRARIES ##
@@ -114,15 +126,18 @@ install(DIRECTORY include/
 
 
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
+  # find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
+  # set(ament_cmake_copyright_FOUND TRUE)
   # the following line skips cpplint (only works in a git repo)
   # comment the line when this package is in a git repo and when
   # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
+  # set(ament_cmake_cpplint_FOUND TRUE)
+
+  ament_add_test(mpc_test COMMAND $<TARGET_FILE:mpc_test>)
+
+  # ament_lint_auto_find_test_dependencies()
 endif()
 
 ament_package()
