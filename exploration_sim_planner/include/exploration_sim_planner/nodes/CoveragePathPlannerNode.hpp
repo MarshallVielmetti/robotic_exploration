@@ -8,6 +8,7 @@
 
 #include "exploration_sim_msgs/msg/connectivity_graph.hpp"
 #include "exploration_sim_msgs/msg/frontier_clusters.hpp"
+#include "exploration_sim_msgs/msg/tsp_problem.hpp"
 #include "exploration_sim_planner/coverage_planner/ConnectedComponentsLabeling.hpp"
 #include "exploration_sim_planner/util/AtspSolver.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
@@ -28,15 +29,14 @@ class CoveragePathPlannerNode : public rclcpp::Node {
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
 
-  rclcpp::Publisher<exploration_sim_msgs::msg::ConnectivityGraph>::SharedPtr
-      graph_pub_;
-  rclcpp::Publisher<exploration_sim_msgs::msg::FrontierClusters>::SharedPtr
-      frontier_pub_;
+  rclcpp::Publisher<exploration_sim_msgs::msg::ConnectivityGraph>::SharedPtr graph_pub_;
+  rclcpp::Publisher<exploration_sim_msgs::msg::FrontierClusters>::SharedPtr frontier_pub_;
 
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr labels_pub_;
   rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr zones_pub_;
 
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_pub_;
+  rclcpp::Publisher<exploration_sim_msgs::msg::TspProblem>::SharedPtr tsp_pub_;
 
   std::unique_ptr<ATSPSolver> tsp_solver_;
 };

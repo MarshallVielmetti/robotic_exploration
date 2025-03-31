@@ -39,7 +39,7 @@ int main() {
     auto subpath = std::vector<Eigen::Vector2d>(path.begin() + current_idx, path.begin() + current_idx + horizon);
     Eigen::Vector2d control = mpc.compute_control(state, theta, 0, subpath);
 
-    std::cout << "Computed Control: v = " << control[0] << ", omega = " << control[1] << std::endl;
+    // std::cout << "Computed Control: v = " << control[0] << ", omega = " << control[1] << std::endl;
 
     state[0] += control[0] * std::cos(theta) * dt;
     state[1] += control[0] * std::sin(theta) * dt;
@@ -66,12 +66,12 @@ int main() {
 
     current_idx = min_idx;
 
-    std::cout << "New State: x = " << state[0] << ", y = " << state[1] << ", theta = " << theta << std::endl;
+    // std::cout << "New State: x = " << state[0] << ", y = " << state[1] << ", theta = " << theta << std::endl;
   }
 
-  Eigen::Vector2d control = mpc.compute_control(state, theta, 0, path);
+  // Eigen::Vector2d control = mpc.compute_control(state, theta, 0, path);
 
-  std::cout << "Computed Control: v = " << control[0] << ", omega = " << control[1] << std::endl;
+  // std::cout << "Computed Control: v = " << control[0] << ", omega = " << control[1] << std::endl;
 
   // pretty pritn the solution vector
   // for (size_t i = 0; i < 30; i += 3) {

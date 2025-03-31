@@ -16,20 +16,14 @@ ShortTermPlannerNode::ShortTermPlannerNode() : Node("short_term_planner_node") {
   RCLCPP_INFO(this->get_logger(), "ShortTermPlannerNode node started");
 
   coverage_path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
-      "coverage_path", 10,
-      std::bind(&ShortTermPlannerNode::coverage_path_callback, this,
-                std::placeholders::_1));
+      "coverage_path", 10, std::bind(&ShortTermPlannerNode::coverage_path_callback, this, std::placeholders::_1));
 
   map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-      "map", 10,
-      std::bind(&ShortTermPlannerNode::map_callback, this,
-                std::placeholders::_1));
+      "map", 10, std::bind(&ShortTermPlannerNode::map_callback, this, std::placeholders::_1));
 
-  short_term_path_pub_ =
-      this->create_publisher<nav_msgs::msg::Path>("short_term_path", 10);
+  short_term_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("short_term_path", 10);
 
-  committed_path_pub_ =
-      this->create_publisher<nav_msgs::msg::Path>("committed_path", 10);
+  committed_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("committed_path", 10);
 
   committed_path_timer_ = this->create_wall_timer(10s, [this]() {
     RCLCPP_INFO(this->get_logger(), "Replanning committed path");
@@ -58,31 +52,28 @@ ShortTermPlannerNode::ShortTermPlannerNode() : Node("short_term_planner_node") {
   });
 }
 
-void ShortTermPlannerNode::map_callback(
-    const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
+void ShortTermPlannerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
   // Store an OgmView -- used for transformations
   ogm_ = std::make_shared<OgmView>(msg);
 
   RCLCPP_DEBUG(this->get_logger(), "Received map");
 
-  Eigen::Map<const Eigen::Matrix<int8_t, Eigen::Dynamic, Eigen::Dynamic,
-                                 Eigen::RowMajor>>
-      map_view(reinterpret_cast<const int8_t *>(msg->data.data()),
-               msg->info.height, msg->info.width);
+  Eigen::Map<const Eigen::Matrix<int8_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> map_view(
+      reinterpret_cast<const int8_t *>(msg->data.data()), msg->info.height, msg->info.width);
 
   curr_esdf_ = map_view.cast<double>();
 }
 
-void ShortTermPlannerNode::coverage_path_callback(
-    const nav_msgs::msg::Path::SharedPtr msg) {
+void ShortTermPlannerNode::coverage_path_callback(const nav_msgs::msg::Path::SharedPtr msg) {
   // Verify there is a valid map
   if (!ogm_) {
-    RCLCPP_WARN(this->get_logger(),
-                "Received coverage path before map, ignoring");
+    RCLCPP_WARN(this->get_logger(), "Received coverage path before map, ignoring");
     return;
   }
 
   RCLCPP_DEBUG(this->get_logger(), "Received coverage path");
+  RCLCPP_INFO(this->get_logger(), "Received path starting at %f, %f", msg->poses[0].pose.position.x,
+              msg->poses[0].pose.position.y);
 
   // Every time a new coverage path is received, replan the short term path
   current_coverage_path_.clear();
@@ -94,8 +85,7 @@ void ShortTermPlannerNode::coverage_path_callback(
     current_coverage_path_.push_back(map_point);
   }
 
-  auto path = ShortTermPathPlanner::fit_smoothed_path(curr_esdf_,
-                                                      current_coverage_path_);
+  auto path = ShortTermPathPlanner::fit_smoothed_path(curr_esdf_, current_coverage_path_);
 
   // Convert the path to a nav_msgs::Path message in
   auto path_msg = nav_msgs::msg::Path();

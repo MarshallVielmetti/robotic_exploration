@@ -46,6 +46,8 @@ CoveragePathPlannerNode::CoveragePathPlannerNode() : Node("coverage_path_planner
 
   path_pub_ = create_publisher<nav_msgs::msg::Path>("coverage_path", 10);
 
+  tsp_pub_ = create_publisher<exploration_sim_msgs::msg::TspProblem>("tsp_problem", 10);
+
   tsp_solver_ = std::make_unique<SimulatedAnnealingSolver>(500000, 0.9995);
 }
 
@@ -108,31 +110,50 @@ void CoveragePathPlannerNode::map_callback(const nav_msgs::msg::OccupancyGrid::S
   auto [target_positions, cost_matrix] = connected_components_util_.compute_atsp_cost_matrix(
       graph, active_zone_viewpoints, cell_labels, zones, current_position);
 
-  // now solve the ATSP using the cost matrix
-  auto tsp_solution = tsp_solver_->solve(cost_matrix);
-
-  // convert the solution to a path in the map frame
-  std::vector<Eigen::Vector2d> path(tsp_solution.size());
-
-  nav_msgs::msg::Path path_msg;
-  path_msg.poses = std::vector<geometry_msgs::msg::PoseStamped>(tsp_solution.size());
-
-  std::transform(tsp_solution.begin(), tsp_solution.end(), path_msg.poses.begin(),
-                 [&target_positions, &ogm_view, &msg](uint32_t i) {
-                   auto global_loc = ogm_view->cell_to_world(target_positions[i].position);
-                   geometry_msgs::msg::PoseStamped pose;
-                   pose.pose.position.x = global_loc.x();
-                   pose.pose.position.y = global_loc.y();
-                   pose.pose.orientation.w = 1.0;
-                   pose.header = msg->header;
-                   return pose;
+  // convert the target positions and cost matrix to a TSP problem message
+  exploration_sim_msgs::msg::TspProblem problem_msg;
+  // auto tsp_problem = msg_util::to_tsp_problem(target_positions, cost_matrix);
+  problem_msg.header = msg->header;
+  problem_msg.nodes = std::vector<geometry_msgs::msg::Pose>(target_positions.size());
+  std::transform(target_positions.begin(), target_positions.end(), problem_msg.nodes.begin(),
+                 [&ogm_view](const TargetPosition& tp) {
+                   auto global_loc = ogm_view->cell_to_world(tp.position);
+                   geometry_msgs::msg::Pose p;
+                   p.position.x = global_loc.x();
+                   p.position.y = global_loc.y();
+                   p.position.z = 0.0;
+                   return p;
                  });
 
-  path_msg.header = msg->header;
+  problem_msg.weights = std::vector<double>(cost_matrix.data(), cost_matrix.data() + cost_matrix.size());
+
+  tsp_pub_->publish(problem_msg);
+
+  // now solve the ATSP using the cost matrix
+  // auto tsp_solution = tsp_solver_->solve(cost_matrix);
+
+  // convert the solution to a path in the map frame
+  // std::vector<Eigen::Vector2d> path(tsp_solution.size());
+
+  // nav_msgs::msg::Path path_msg;
+  // path_msg.poses = std::vector<geometry_msgs::msg::PoseStamped>(tsp_solution.size());
+
+  // std::transform(tsp_solution.begin(), tsp_solution.end(), path_msg.poses.begin(),
+  //                [&target_positions, &ogm_view, &msg](uint32_t i) {
+  //                  auto global_loc = ogm_view->cell_to_world(target_positions[i].position);
+  //                  geometry_msgs::msg::PoseStamped pose;
+  //                  pose.pose.position.x = global_loc.x();
+  //                  pose.pose.position.y = global_loc.y();
+  //                  pose.pose.orientation.w = 1.0;
+  //                  pose.header = msg->header;
+  //                  return pose;
+  //                });
+
+  // path_msg.header = msg->header;
 
   // This is the primary purpose of this node -- to publish a global coverage
   // path
-  path_pub_->publish(path_msg);
+  // path_pub_->publish(path_msg);
 
   // Use the OgmView to modify the locations of the centers to be global
   // coordinates instead of relative to the OGM

@@ -42,11 +42,13 @@ add_library(exploration_sim_planner_util SHARED
   src/util/BSplineUtil.cpp
   src/util/EsdfUtil.cpp
   src/util/MpcController.cpp
+  src/util/DubinsPath.cpp
 )
 ament_target_dependencies(exploration_sim_planner_util std_msgs geometry_msgs nav_msgs exploration_sim_msgs Eigen3)
 target_link_libraries(exploration_sim_planner_util TBB::tbb ${OSQP_LIBRARIES} OsqpEigen::OsqpEigen)
 target_include_directories(exploration_sim_planner_util PRIVATE ${PROJECT_SOURCE_DIR}/include OsqpEigen::OsqpEigen)
 
+# Compile Pose Transform Listener
 add_executable(pose_listener src/nodes/PoseTransformListenerNode.cpp)
 ament_target_dependencies(pose_listener rclcpp geometry_msgs tf2 tf2_ros Eigen3)
 target_include_directories(pose_listener PRIVATE ${PROJECT_SOURCE_DIR}/include)
@@ -94,10 +96,6 @@ add_executable(diff_drive_controller src/nodes/DiffDriveControllerNode.cpp)
 ament_target_dependencies(diff_drive_controller rclcpp nav_msgs geometry_msgs std_msgs Eigen3)
 target_include_directories(diff_drive_controller PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
-add_executable(mpc_test test/mpc_test.cpp)
-target_link_libraries(mpc_test exploration_sim_planner_util)
-ament_target_dependencies(mpc_test Eigen3)
-target_include_directories(mpc_test PRIVATE ${PROJECT_SOURCE_DIR}/include)
 
 
 ## INSTALL LIBRARIES ##
@@ -134,8 +132,25 @@ if(BUILD_TESTING)
   # comment the line when this package is in a git repo and when
   # a copyright and license is added to all source files
   # set(ament_cmake_cpplint_FOUND TRUE)
-
+  
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(${PROJECT_NAME}_test test/dubins_test.cpp)
+  target_include_directories(${PROJECT_NAME}_test PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+  ament_target_dependencies(${PROJECT_NAME}_test
+    Eigen3
+  )
+  target_link_libraries(${PROJECT_NAME}_test exploration_sim_planner_util)
+  
+  # MPC test
+  add_executable(mpc_test test/mpc_test.cpp)
+  target_link_libraries(mpc_test exploration_sim_planner_util)
+  ament_target_dependencies(mpc_test Eigen3)
+  target_include_directories(mpc_test PRIVATE ${PROJECT_SOURCE_DIR}/include)
   ament_add_test(mpc_test COMMAND $<TARGET_FILE:mpc_test>)
+  
 
   # ament_lint_auto_find_test_dependencies()
 endif()

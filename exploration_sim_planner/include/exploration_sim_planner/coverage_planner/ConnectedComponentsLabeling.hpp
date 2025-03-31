@@ -28,12 +28,7 @@
 #include "exploration_sim_planner/util/EigenUtil.hpp"
 #include "exploration_sim_planner/util/OgmView.hpp"
 
-enum class CellLabel {
-  UNKNOWN = 0,
-  OCCUPIED = 1,
-  SAFE_FREE = 2,
-  UNSAFE_FREE = 3
-};
+enum class CellLabel { UNKNOWN = 0, OCCUPIED = 1, SAFE_FREE = 2, UNSAFE_FREE = 3 };
 
 enum class EdgeType { INVALID = 0, FREE = 1, UNKNOWN = 2, PORTAL = 3 };
 
@@ -42,11 +37,7 @@ struct Edge {
   double cost;
 };
 
-enum class LocationType {
-  VIEWPOINT_CENTER,
-  UNKNOWN_ZONE_CENTER,
-  ROBOT_POSITION
-};
+enum class LocationType { VIEWPOINT_CENTER, UNKNOWN_ZONE_CENTER, ROBOT_POSITION };
 struct TargetPosition {
   Eigen::Vector2d position;  // location of the target
   LocationType type;         // type of the location
@@ -76,8 +67,7 @@ struct PCAResult {
   Eigen::MatrixXd eigenvectors;
   Eigen::MatrixXd transformed_data;
 
-  PCAResult(Eigen::VectorXd& evals, Eigen::MatrixXd& evecs,
-            Eigen::MatrixXd& data)
+  PCAResult(Eigen::VectorXd& evals, Eigen::MatrixXd& evecs, Eigen::MatrixXd& data)
       : eigenvalues(evals), eigenvectors(evecs), transformed_data(data) {}
 };
 
@@ -141,8 +131,7 @@ class ConnectedComponentsLabeling {
    * representing the connected component identifier of the corresponding cell
    * in the occupancy grid.
    */
-  Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic> label_cells(
-      const OgmView& ogm);
+  Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic> label_cells(const OgmView& ogm);
 
   /**
    * @brief Identifies and extracts frontier cells from a labeled occupancy
@@ -158,8 +147,7 @@ class ConnectedComponentsLabeling {
    * identified frontier cells in the grid
    */
   std::vector<Eigen::Vector2i> find_frontier_cells(
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels);
+      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels);
 
   /**
    * @brief Clusters frontier cells into connected components.
@@ -173,12 +161,10 @@ class ConnectedComponentsLabeling {
    * @return Vector of clusters, where each cluster is a vector of connected
    * frontier cells
    */
-  std::vector<std::vector<Eigen::Vector2i>> cluster_frontiers(
-      const std::vector<Eigen::Vector2i>& frontier_cells);
+  std::vector<std::vector<Eigen::Vector2i>> cluster_frontiers(const std::vector<Eigen::Vector2i>& frontier_cells);
 
   std::vector<std::vector<Eigen::Vector2d>> sample_frontier_viewpoints(
-      const std::vector<std::vector<Eigen::Vector2i>>& frontier_cells,
-      const Eigen::MatrixX<CellLabel>& cell_labels);
+      const std::vector<std::vector<Eigen::Vector2i>>& frontier_cells, const Eigen::MatrixX<CellLabel>& cell_labels);
 
   /**
    * @brief Computes zones based on connected components labeling of cell
@@ -198,8 +184,7 @@ class ConnectedComponentsLabeling {
    * determined by the underlying connected components labeling algorithm.
    */
   Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic> compute_zones(
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels);
+      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels);
 
   /**
    * @brief Finds the centers of connected components in the provided cell label
@@ -217,10 +202,8 @@ class ConnectedComponentsLabeling {
    * @return A vector of Eigen::Vector2d objects, where each vector represents
    * the center of a detected connected component.
    */
-  std::vector<Eigen::Vector2d> find_centers(
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels,
-      const Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones);
+  std::vector<Eigen::Vector2d> find_centers(const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
+                                            const Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones);
 
   /**
    * @brief Computes the incremental connectivity graph.
@@ -239,8 +222,7 @@ class ConnectedComponentsLabeling {
    * and edges represent connectivity associations between them.
    */
   ConnectivityGraph compute_incremental_connectivity_graph(
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels,
+      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
       const std::vector<Eigen::Vector2d>& centers);
 
   // std::vector<std::vector<Eigen::Vector2d>> find_viewpoint_representatives(
@@ -248,17 +230,28 @@ class ConnectedComponentsLabeling {
   //     const Eigen::MatrixX<uint32_t>& zones,
   //     const std::vector<std::vector<Eigen::Vector2d>>& frontier_viewpoints);
 
-  std::pair<std::vector<TargetPosition>, Eigen::MatrixXd>
-  compute_atsp_cost_matrix(const ConnectivityGraph& graph,
-                           const std::vector<std::vector<Eigen::Vector2d>>&
-                               viewpoint_representatives,
-                           const Eigen::MatrixX<CellLabel>& cell_labels,
-                           const Eigen::MatrixX<uint32_t>& zones,
-                           const Eigen::Vector2d& current_position);
+  std::pair<std::vector<TargetPosition>, Eigen::MatrixXd> compute_atsp_cost_matrix(
+      const ConnectivityGraph& graph, const std::vector<std::vector<Eigen::Vector2d>>& viewpoint_representatives,
+      const Eigen::MatrixX<CellLabel>& cell_labels, const Eigen::MatrixX<uint32_t>& zones,
+      const Eigen::Vector2d& current_position);
 
+  /**
+   * @brief Finds representative viewpoints for each connected component of frontier viewpoints.
+   *
+   * This function analyzes the given zones matrix and associates each connected component with its corresponding
+   * frontier viewpoints. A connected component here typically represents a contiguous region in the zones grid.
+   * For each such region, the function selects a set of representative viewpoints from the provided list of frontier
+   * viewpoints.
+   *
+   * @param zones A matrix where each element represents a zone identifier, which is used to determine connected
+   * regions.
+   * @param frontier_viewpoints A vector of vectors of 2D points. Each inner vector contains the frontier viewpoints
+   * associated with a specific zone or connected component.
+   * @return A vector of vectors of 2D points, where each inner vector contains representative viewpoints for a
+   * connected component.
+   */
   std::vector<std::vector<Eigen::Vector2d>> find_viewpoint_representatives(
-      const Eigen::MatrixX<uint32_t>& zones,
-      const std::vector<std::vector<Eigen::Vector2d>>& frontier_viewpoints);
+      const Eigen::MatrixX<uint32_t>& zones, const std::vector<std::vector<Eigen::Vector2d>>& frontier_viewpoints);
 
  private:
   // Get the label of a cell
@@ -283,11 +276,9 @@ class ConnectedComponentsLabeling {
    * @param zone_id A reference to an unsigned integer that holds the current
    * zone identifier. It is incremented when new zones are assigned.
    */
-  void compute_sector_zones(
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels,
-      Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones,
-      uint32_t x, uint32_t y, uint32_t& zone_id);
+  void compute_sector_zones(const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
+                            Eigen::Matrix<uint32_t, Eigen::Dynamic, Eigen::Dynamic>& zones, uint32_t x, uint32_t y,
+                            uint32_t& zone_id);
 
   /**
    * @brief Computes a path cost using A* with restricted exploration.
@@ -308,24 +299,18 @@ class ConnectedComponentsLabeling {
    * @return std::optional<double> The cost of the computed path if one exists;
    *         otherwise, an empty optional indicating no valid path was found.
    */
-  std::optional<double> restricted_astar(
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels,
-      const Eigen::Vector2i& start, const Eigen::Vector2i& goal);
+  std::optional<double> restricted_astar(const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels,
+                                         const Eigen::Vector2i& start, const Eigen::Vector2i& goal);
 
-  std::vector<Eigen::Vector2i> get_valid_neighbors(
-      const Eigen::Vector2i& cell,
-      std::function<bool(const Eigen::Vector2i)>& is_valid_cell);
+  std::vector<Eigen::Vector2i> get_valid_neighbors(const Eigen::Vector2i& cell,
+                                                   std::function<bool(const Eigen::Vector2i)>& is_valid_cell);
 
-  bool is_frontier(const Eigen::Matrix<CellLabel, Eigen::Dynamic,
-                                       Eigen::Dynamic>& cell_labels,
-                   uint32_t x, uint32_t y);
+  bool is_frontier(const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels, uint32_t x, uint32_t y);
 
   PCAResult cluster_pca(std::vector<Eigen::Vector2i>& cluster);
 
-  std::pair<std::vector<Eigen::Vector2i>, std::vector<Eigen::Vector2i>>
-  split_cluster(const std::vector<Eigen::Vector2i>& cluster,
-                const PCAResult& pca);
+  std::pair<std::vector<Eigen::Vector2i>, std::vector<Eigen::Vector2i>> split_cluster(
+      const std::vector<Eigen::Vector2i>& cluster, const PCAResult& pca);
 
   /**
    * @brief Samples viewpoints for one frontier cluster
@@ -341,8 +326,7 @@ class ConnectedComponentsLabeling {
    * viewpoints
    */
   static std::vector<Eigen::Vector2d> sample_one_frontier_viewpoints(
-      const std::vector<Eigen::Vector2i>& frontier_cluster,
-      const Eigen::MatrixX<CellLabel>& cell_labels);
+      const std::vector<Eigen::Vector2i>& frontier_cluster, const Eigen::MatrixX<CellLabel>& cell_labels);
 
   /**
    * @brief Filters and refines a list of viewpoint positions based on frontier
@@ -368,10 +352,9 @@ class ConnectedComponentsLabeling {
    * necessary connectivity or segment information that is used to filter the
    * viewpoints.
    */
-  static void filter_viewpoints(
-      std::vector<Eigen::Vector2d>& viewpoints,
-      const std::vector<Eigen::Vector2i>& frontier_cells,
-      const Eigen::MatrixX<CellLabel>& cell_labels);
+  static void filter_viewpoints(std::vector<Eigen::Vector2d>& viewpoints,
+                                const std::vector<Eigen::Vector2i>& frontier_cells,
+                                const Eigen::MatrixX<CellLabel>& cell_labels);
 
   /**
    * @brief Calculates the coverage metric from a given viewpoint.
@@ -389,10 +372,8 @@ class ConnectedComponentsLabeling {
    * within the grid.
    * @return A double value representing the calculated coverage.
    */
-  static double calculate_coverage(
-      const Eigen::Vector2d& viewpoint,
-      const std::vector<Eigen::Vector2i>& frontier_cells,
-      const Eigen::MatrixX<CellLabel>& cell_labels);
+  static double calculate_coverage(const Eigen::Vector2d& viewpoint, const std::vector<Eigen::Vector2i>& frontier_cells,
+                                   const Eigen::MatrixX<CellLabel>& cell_labels);
 
   /**
    * @brief Computes rectified viewpoint representatives for frontier cluster
@@ -411,16 +392,12 @@ class ConnectedComponentsLabeling {
    *
    * @param graph The connectivity graph to be processed.
    */
-  void filter_isolated_subcomponents(
-      ConnectivityGraph& graph,
-      const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>&
-          cell_labels);
+  void filter_isolated_subcomponents(ConnectivityGraph& graph,
+                                     const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels);
 
-  double grid_astar(Eigen::Vector2d& start, Eigen::Vector2d& goal,
-                    const Eigen::MatrixX<CellLabel>& cell_labels);
+  double grid_astar(Eigen::Vector2d& start, Eigen::Vector2d& goal, const Eigen::MatrixX<CellLabel>& cell_labels);
 
-  double graph_astar(uint32_t start_node, uint32_t end_node,
-                     const ConnectivityGraph& graph);
+  double graph_astar(uint32_t start_node, uint32_t end_node, const ConnectivityGraph& graph);
 
  private:
   // The size of the sectors in the map
