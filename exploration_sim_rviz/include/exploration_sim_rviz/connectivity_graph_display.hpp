@@ -51,6 +51,7 @@ private:
   rviz_common::properties::ColorProperty *free_color_property_;
   rviz_common::properties::ColorProperty *unknown_color_property_;
   rviz_common::properties::ColorProperty *portal_color_property_;
+  rviz_common::properties::BoolProperty *toggle_path_coloring_;
 };
 
 } // namespace exploration_sim_rviz

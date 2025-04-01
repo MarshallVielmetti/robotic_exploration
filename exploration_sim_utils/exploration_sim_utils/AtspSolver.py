@@ -25,7 +25,7 @@ class AtspSolver(Node):
         self.tsp_msg_sub_
 
     def tsp_callback(self, msg: TspProblem):
-        self.get_logger().debug(f"Received TSP problem of length {len(msg.nodes)}")
+        self.get_logger().info(f"Received TSP problem of length {len(msg.nodes)}")
 
         if len(msg.nodes) < 3:
             self.get_logger().debug("Not enough nodes to solve TSP")
@@ -34,14 +34,18 @@ class AtspSolver(Node):
 
         # Update and solve problem
         self.update_problem(msg)
+
+        # print problem
         output = lkh.solve(problem=self.problem, max_trials=1000, runs=10)
 
         # Permute the nodes in the message to match the optimal tour
         optimal_tour = output[0]
+        print("Optimal tour: ", optimal_tour)
 
         # Find the index of robot position (last node in message) in the optimal tour
         start_idx = optimal_tour.index(len(msg.nodes))
         optimal_tour = optimal_tour[start_idx:] + optimal_tour[:start_idx]
+        print("Permuted tour: ", optimal_tour)
 
         # Reorder the nodes to reflect the optimal tour
         reordered_nodes = [msg.nodes[i - 1] for i in optimal_tour]
@@ -52,7 +56,7 @@ class AtspSolver(Node):
     def init_problem(self):
         problem = lkh.LKHProblem()
 
-        problem.type = "ATSP"
+        problem.type = "TSP"
 
         # Set to 0 to indicate that the dimension is not known yet
         problem.dimension = 0
@@ -62,7 +66,7 @@ class AtspSolver(Node):
         problem.edge_weights = []
 
         problem.TRACE_LEVEL = 1  # Amount of output (0=silent, 1=normal, 2=verbose)
-        problem.RUNS = 10  # Number of independent runs
+        # problem.RUNS = 10  # Number of independent runs
         problem.CANDIDATE_SET_TYPE = "ALPHA"  # Type of candidate set
 
         return problem
@@ -73,10 +77,14 @@ class AtspSolver(Node):
         weights = np.array(msg.weights, dtype=np.float32).reshape(
             (self.problem.dimension, self.problem.dimension)
         )
+        weights = weights.T
 
         scale_factor = 100
+        weights[np.isinf(weights)] = 999999
         int_weights = np.round(weights * scale_factor).astype(np.int32)
-        int_weights[np.isinf(weights)] = 999999
+
+        # print reconstructed weights matrix
+        print(f"Reconstructed weights matrix: {int_weights}")
 
         self.problem.edge_weights = int_weights  # int_weights.flatten().tolist()
 

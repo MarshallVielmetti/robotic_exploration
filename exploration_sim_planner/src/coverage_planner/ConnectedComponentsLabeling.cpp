@@ -94,7 +94,7 @@ std::vector<Eigen::Vector2i> ConnectedComponentsLabeling::find_frontier_cells(
 }
 
 std::vector<std::vector<Eigen::Vector2i>> ConnectedComponentsLabeling::cluster_frontiers(
-    const std::vector<Eigen::Vector2i>& frontier_cells) {
+    const Eigen::MatrixX<CellLabel>& cell_labels, const std::vector<Eigen::Vector2i>& frontier_cells) {
   // Uses the UnionFind datastructure
   UnionFind uf(frontier_cells.size());
 
@@ -102,9 +102,14 @@ std::vector<std::vector<Eigen::Vector2i>> ConnectedComponentsLabeling::cluster_f
     for (uint32_t j = i + 1; j < frontier_cells.size(); j++) {
       // check if the two cells are adjacent
       auto diff = frontier_cells[i] - frontier_cells[j];
+      double norm = diff.norm();
 
-      // allow uniting along diagonals
-      if (std::abs(diff.x()) <= 1 && std::abs(diff.y()) <= 1) {
+      // only unite adjacent cells
+      // if (std::abs(diff.x()) <= 1 && std::abs(diff.y()) <= 1 &&) {
+      //   uf.unite(i, j);
+      // }
+      // little bit of tolerance
+      if (norm <= 1.1) {
         uf.unite(i, j);
       }
     }
@@ -173,14 +178,23 @@ std::vector<std::vector<Eigen::Vector2i>> ConnectedComponentsLabeling::cluster_f
 
 bool ConnectedComponentsLabeling::is_frontier(
     const Eigen::Matrix<CellLabel, Eigen::Dynamic, Eigen::Dynamic>& cell_labels, uint32_t x, uint32_t y) {
-  // frontier cell is an unknown cell that borders a free cell
+  // frontier cell is an unknown cell that borders a free cell (include diagonals)
   if (cell_labels(y, x) != CellLabel::UNKNOWN) {
     return false;
   }
 
+  // Must have be 8-connected to a free cell and directly
+  // conencted to an unknown cell to prevent chatter
+
+  bool found_free = false;
+  bool found_unknown = false;
+
   for (int32_t dy = -1; dy <= 1; dy++) {
     for (int32_t dx = -1; dx <= 1; dx++) {
-      if ((dx == 0 && dy == 0) || (dx != 0 && dy != 0)) {
+      // if ((dx == 0 && dy == 0) || (dx != 0 && dy != 0)) {
+      //   continue;
+      // }
+      if (dx == 0 && dy == 0) {
         continue;
       }
 
@@ -190,6 +204,12 @@ bool ConnectedComponentsLabeling::is_frontier(
 
       if (cell_labels(y + dy, x + dx) == CellLabel::SAFE_FREE ||
           cell_labels(y + dy, x + dx) == CellLabel::UNSAFE_FREE) {
+        found_free = true;
+      } else if ((dx == 0 || dy == 0) && cell_labels(y + dy, x + dx) == CellLabel::UNKNOWN) {
+        found_unknown = true;
+      }
+
+      if (found_free && found_unknown) {
         return true;
       }
     }
@@ -486,6 +506,24 @@ void ConnectedComponentsLabeling::compute_sector_zones(
       // check the cell below (requires dy > 0)
       if (dy > 0 && cell_labels(y, x) == cell_labels(y - 1, x)) {
         uf.unite(dy * sector_size_ + dx, (dy - 1) * sector_size_ + dx);
+      }
+    }
+  }
+
+  // arbitrarily squash any zone with only one cell into the zone to the left
+  // or above
+  for (uint32_t dy = 0; dy < sector_size_ && y0 + dy < cell_labels.rows(); dy++) {
+    for (uint32_t dx = 0; dx < sector_size_ && x0 + dx < cell_labels.cols(); dx++) {
+      auto sizes = uf.get_sizes();
+      uint32_t set_id = uf.find(dy * sector_size_ + dx);
+
+      if (sizes[set_id] == 1) {
+        // check the cell to the left (requires dx > 0)
+        if (dx > 0) {
+          uf.unite(uf.find(dy * sector_size_ + dx - 1), set_id);
+        } else if (dy > 0) {
+          uf.unite(uf.find((dy - 1) * sector_size_ + dx - 1), set_id);
+        }
       }
     }
   }
@@ -949,21 +987,21 @@ std::pair<std::vector<TargetPosition>, Eigen::MatrixXd> ConnectedComponentsLabel
         uint32_t end_node;
         double min_end_dist = std::numeric_limits<double>::infinity();
 
-        for (auto& node : graph.nodes) {
-          double dist = (node - target_positions[row].position).norm();
+        for (size_t i = 0; i < graph.nodes.size(); i++) {
+          double dist = (graph.nodes[i] - target_positions[row].position).norm();
           if (dist < min_start_dist) {
-            start_node = &node - &graph.nodes[0];
+            start_node = i;
             min_start_dist = dist;
           }
 
-          dist = (node - target_positions[col].position).norm();
+          dist = (graph.nodes[i] - target_positions[col].position).norm();
           if (dist < min_end_dist) {
-            end_node = &node - &graph.nodes[0];
+            end_node = i;
             min_end_dist = dist;
           }
         }
 
-        cost = graph_astar(start_node, end_node, graph);
+        cost = graph_astar(start_node, end_node, graph) + min_start_dist + min_end_dist;  // approx cost
       }
 
       // set both (symmetric matrix)
@@ -1012,7 +1050,10 @@ double ConnectedComponentsLabeling::grid_astar(Eigen::Vector2d& start, Eigen::Ve
       auto label = cell_labels(neighbor.y(), neighbor.x());
 
       // only search through safe and unknown cells
-      if (label != CellLabel::SAFE_FREE && label != CellLabel::UNKNOWN) {
+      // if (label != CellLabel::SAFE_FREE && label != CellLabel::UNKNOWN) {
+      //   continue;
+      // }
+      if (label == CellLabel::OCCUPIED) {
         continue;
       }
 

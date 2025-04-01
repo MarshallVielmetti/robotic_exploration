@@ -6,6 +6,7 @@
 #include "exploration_sim_rviz/connectivity_graph_display.hpp"
 #include <OgrePrerequisites.h>
 #include <memory>
+#include <rviz_common/properties/bool_property.hpp>
 #include <rviz_rendering/objects/billboard_line.hpp>
 
 namespace exploration_sim_rviz {
@@ -30,6 +31,9 @@ ConnectivityGraphDisplay::ConnectivityGraphDisplay() {
 
   portal_color_property_ = new rviz_common::properties::ColorProperty(
       "Line Color", QColor(0, 0, 255), "Color for connection lines", this);
+
+  toggle_path_coloring_ = new rviz_common::properties::BoolProperty(
+      "Toggle Path WEight Coloring", false, "Toggle path coloring", this);
 }
 
 ConnectivityGraphDisplay::~ConnectivityGraphDisplay() { clearMarkers(); }
@@ -84,6 +88,8 @@ void ConnectivityGraphDisplay::processMessage(
                                       portal_line_qcolor.greenF(),
                                       portal_line_qcolor.blueF(), 1.0);
 
+  bool is_weight_colored = toggle_path_coloring_->getBool();
+
   const float z_offset = 0.025f; // Place slightly above the ground
 
   // Create markers for nodes
@@ -107,6 +113,20 @@ void ConnectivityGraphDisplay::processMessage(
   size_t rows = msg->rows;
   size_t cols = len / rows;
 
+  float max_weight = 0.0;
+
+  if (is_weight_colored) {
+    // find the max weight of all edges
+    for (size_t row = 0; row < rows; row++) {
+      for (size_t col = row + 1; col < cols; col++) {
+        const auto &connection = msg->edges[row * cols + col];
+        if (connection.cost > max_weight) {
+          max_weight = connection.cost;
+        }
+      }
+    }
+  }
+
   for (size_t row = 0; row < rows; row++) {
     for (size_t col = row + 1; col < cols; col++) {
       const auto &connection = msg->edges[row * cols + col];
@@ -125,15 +145,21 @@ void ConnectivityGraphDisplay::processMessage(
       line->addPoint(Ogre::Vector3(from_node.x, from_node.y, z_offset));
       line->addPoint(Ogre::Vector3(to_node.x, to_node.y, z_offset));
 
-      if (connection.label == 1) {
-        line->setColor(portal_line_qcolor.redF(), portal_line_qcolor.greenF(),
-                       portal_line_qcolor.blueF(), 1.0);
-      } else if (connection.label == 2) {
-        line->setColor(unknown_line_qcolor.redF(), unknown_line_qcolor.greenF(),
-                       unknown_line_qcolor.blueF(), 1.0);
-      } else if (connection.label == 3) {
-        line->setColor(portal_line_qcolor.redF(), portal_line_qcolor.greenF(),
-                       portal_line_qcolor.blueF(), 1.0);
+      if (is_weight_colored) {
+        line->setColor(connection.cost / max_weight, 0.0,
+                       1.0 - connection.cost / max_weight, 1.0);
+      } else {
+        if (connection.label == 1) {
+          line->setColor(portal_line_qcolor.redF(), portal_line_qcolor.greenF(),
+                         portal_line_qcolor.blueF(), 1.0);
+        } else if (connection.label == 2) {
+          line->setColor(unknown_line_qcolor.redF(),
+                         unknown_line_qcolor.greenF(),
+                         unknown_line_qcolor.blueF(), 1.0);
+        } else if (connection.label == 3) {
+          line->setColor(portal_line_qcolor.redF(), portal_line_qcolor.greenF(),
+                         portal_line_qcolor.blueF(), 1.0);
+        }
       }
 
       edge_lines_.push_back(std::move(line));

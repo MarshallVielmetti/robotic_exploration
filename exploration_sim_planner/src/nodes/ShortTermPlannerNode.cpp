@@ -9,6 +9,9 @@
 #include <rclcpp/utilities.hpp>
 
 #include "exploration_sim_planner/short_term_planner/ShortTermPathPlanner.hpp"
+#include "exploration_sim_planner/util/OgmView.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 using namespace std::chrono_literals;
 
@@ -30,6 +33,9 @@ ShortTermPlannerNode::ShortTermPlannerNode() : Node("short_term_planner_node") {
     this->committed_path_ = std::move(current_candidate_);
     this->committed_path_pub_->publish(this->committed_path_);
   });
+
+  backup_target_pub_ = this->create_publisher<geometry_msgs::msg::PointStamped>("backup_target", 10);
+  backup_path_pub_ = this->create_publisher<nav_msgs::msg::Path>("backup_path", 10);
 
   safety_timer_ = this->create_wall_timer(0.1s, [this]() {
     if (committed_path_.poses.empty()) {
@@ -105,6 +111,45 @@ void ShortTermPlannerNode::coverage_path_callback(const nav_msgs::msg::Path::Sha
   path_msg.header = msg->header;
   current_candidate_ = path_msg;
   short_term_path_pub_->publish(path_msg);
+
+  // Using the current coverage path, find the first node that lies in unknown space, then find the first node after
+  // that node that lies in free space
+
+  // auto backup_path = ShortTermPathPlanner::plan_backup(path, current_coverage_path_, ogm_);
+  auto backup_target = ShortTermPathPlanner::find_next_free_waypoint(ogm_, current_coverage_path_);
+
+  if (!backup_target.has_value()) return;
+
+  Eigen::Vector2d world_backup = ogm_->cell_to_world(backup_target.value());
+
+  // publish backup target
+  geometry_msgs::msg::PointStamped backup_target_msg;
+  backup_target_msg.point.x = world_backup.x();
+  backup_target_msg.point.y = world_backup.y();
+  backup_target_msg.header = msg->header;
+  backup_target_pub_->publish(backup_target_msg);
+
+  auto backup_path = ShortTermPathPlanner::compute_backup_dubins(path, backup_target.value(), ogm_);
+
+  if (!backup_path.has_value()) return;
+
+  // publish the backup path
+  nav_msgs::msg::Path backup_path_msg;
+  backup_path_msg.header = msg->header;
+  std::transform(backup_path->begin(), backup_path->end(), std::back_inserter(backup_path_msg.poses),
+                 [this, &msg](const Eigen::Vector3d &point) {
+                   Eigen::Vector2d coords = point.head<2>();
+                   auto world_frame = ogm_->cell_to_world(coords);
+                   geometry_msgs::msg::PoseStamped pose;
+                   pose.pose.position.x = world_frame.x();
+                   pose.pose.position.y = world_frame.y();
+                   pose.pose.orientation.z = point.z();
+                   pose.header = msg->header;
+                   return pose;
+                 });
+
+  // publish the backup path
+  backup_path_pub_->publish(backup_path_msg);
 }
 
 int main(int argc, char **argv) {

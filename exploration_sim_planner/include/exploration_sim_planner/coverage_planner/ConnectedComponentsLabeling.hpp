@@ -37,7 +37,7 @@ struct Edge {
   double cost;
 };
 
-enum class LocationType { VIEWPOINT_CENTER, UNKNOWN_ZONE_CENTER, ROBOT_POSITION };
+enum class LocationType { VIEWPOINT_CENTER = 0, UNKNOWN_ZONE_CENTER = 1, ROBOT_POSITION = 2 };
 struct TargetPosition {
   Eigen::Vector2d position;  // location of the target
   LocationType type;         // type of the location
@@ -161,7 +161,8 @@ class ConnectedComponentsLabeling {
    * @return Vector of clusters, where each cluster is a vector of connected
    * frontier cells
    */
-  std::vector<std::vector<Eigen::Vector2i>> cluster_frontiers(const std::vector<Eigen::Vector2i>& frontier_cells);
+  std::vector<std::vector<Eigen::Vector2i>> cluster_frontiers(const Eigen::MatrixX<CellLabel>& cell_labels,
+                                                              const std::vector<Eigen::Vector2i>& frontier_cells);
 
   std::vector<std::vector<Eigen::Vector2d>> sample_frontier_viewpoints(
       const std::vector<std::vector<Eigen::Vector2i>>& frontier_cells, const Eigen::MatrixX<CellLabel>& cell_labels);

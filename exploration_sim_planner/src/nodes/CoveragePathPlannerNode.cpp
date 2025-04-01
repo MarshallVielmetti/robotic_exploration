@@ -73,7 +73,7 @@ void CoveragePathPlannerNode::map_callback(const nav_msgs::msg::OccupancyGrid::S
   auto frontier_cells = connected_components_util_.find_frontier_cells(cell_labels);
 
   // Run set union algorithm on the frontier cells
-  auto frontier_clusters = connected_components_util_.cluster_frontiers(frontier_cells);
+  auto frontier_clusters = connected_components_util_.cluster_frontiers(cell_labels, frontier_cells);
 
   auto frontier_viewpoints = connected_components_util_.sample_frontier_viewpoints(frontier_clusters, cell_labels);
 
@@ -110,6 +110,8 @@ void CoveragePathPlannerNode::map_callback(const nav_msgs::msg::OccupancyGrid::S
   auto [target_positions, cost_matrix] = connected_components_util_.compute_atsp_cost_matrix(
       graph, active_zone_viewpoints, cell_labels, zones, current_position);
 
+  // print target positions
+
   // convert the target positions and cost matrix to a TSP problem message
   exploration_sim_msgs::msg::TspProblem problem_msg;
   // auto tsp_problem = msg_util::to_tsp_problem(target_positions, cost_matrix);
@@ -124,6 +126,14 @@ void CoveragePathPlannerNode::map_callback(const nav_msgs::msg::OccupancyGrid::S
                    p.position.z = 0.0;
                    return p;
                  });
+
+  for (auto& pos : problem_msg.nodes) {
+    RCLCPP_INFO(get_logger(), "Target position: (%f, %f)", pos.position.x, pos.position.y);
+  }
+
+  // print cost matrix
+  RCLCPP_INFO(get_logger(), "Cost matrix:");
+  std::cout << cost_matrix << std::endl;
 
   problem_msg.weights = std::vector<double>(cost_matrix.data(), cost_matrix.data() + cost_matrix.size());
 

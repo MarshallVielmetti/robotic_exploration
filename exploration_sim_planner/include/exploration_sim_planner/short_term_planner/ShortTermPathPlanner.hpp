@@ -17,10 +17,12 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include "exploration_sim_planner/util/BSplineUtil.hpp"
+#include "exploration_sim_planner/util/OgmView.hpp"
 #include "nav_msgs/msg/path.hpp"
 
 class ShortTermPathPlanner {
@@ -38,12 +40,25 @@ class ShortTermPathPlanner {
    *
    * @return A vector of 2D points sampled along the smoothed path
    */
-  static std::vector<Eigen::Vector2d> fit_smoothed_path(
-      const Eigen::MatrixXd& esdf,
-      const std::vector<Eigen::Vector2d>& global_path);
+  static std::vector<Eigen::Vector2d> fit_smoothed_path(const Eigen::MatrixXd& esdf,
+                                                        const std::vector<Eigen::Vector2d>& global_path);
 
-  static bool check_path_safety(const Eigen::MatrixXd& esdf,
-                                const nav_msgs::msg::Path& path);
+  static std::optional<std::vector<Eigen::Vector3d>> plan_backup(const std::vector<Eigen::Vector2d>& smoothed_path,
+                                                                 const std::vector<Eigen::Vector2d>& coverage_path,
+                                                                 const std::shared_ptr<OgmView>& ogm);
+
+  static bool check_dubins_path_safety(const std::shared_ptr<OgmView>& ogm, const std::vector<Eigen::Vector3d>& path);
+  static bool check_path_safety(const Eigen::MatrixXd& esdf, const nav_msgs::msg::Path& path);
+
+  /**
+   * @brief Finds the first free node in the path after the first unknown node
+   */
+  static std::optional<Eigen::Vector2d> find_next_free_waypoint(const std::shared_ptr<OgmView>& ogm,
+                                                                const std::vector<Eigen::Vector2d>& coverage_path);
+
+  static std::optional<std::vector<Eigen::Vector3d>> compute_backup_dubins(
+      const std::vector<Eigen::Vector2d>& smoothed_path, const Eigen::Vector2d& backup_point,
+      const std::shared_ptr<OgmView>& ogm);
 
  private:
   /**
@@ -55,14 +70,11 @@ class ShortTermPathPlanner {
    * @param current_position The current position of the robot
    * @return A vector of 2D points sampled along the A* path
    */
-  static std::optional<std::vector<Eigen::Vector2i>> fit_astar(
-      const Eigen::MatrixXd& esdf,
-      const std::vector<Eigen::Vector2d>& global_path);
+  static std::optional<std::vector<Eigen::Vector2i>> fit_astar(const Eigen::MatrixXd& esdf,
+                                                               const std::vector<Eigen::Vector2d>& global_path);
 
-  static BSplineUtil::CubicBSpline fit_cubic_bspline(
-      const Eigen::MatrixXd& esdf,
-      const std::vector<Eigen::Vector2i>& astar_path);
+  static BSplineUtil::CubicBSpline fit_cubic_bspline(const Eigen::MatrixXd& esdf,
+                                                     const std::vector<Eigen::Vector2i>& astar_path);
 
-  static std::vector<Eigen::Vector2d> shorten_path(
-      const std::vector<Eigen::Vector2d>& global_path, double max_length);
+  static std::vector<Eigen::Vector2d> shorten_path(const std::vector<Eigen::Vector2d>& global_path, double max_length);
 };

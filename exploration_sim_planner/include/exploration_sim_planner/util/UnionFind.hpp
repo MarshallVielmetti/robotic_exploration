@@ -11,6 +11,7 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 class UnionFind {
@@ -52,4 +53,15 @@ class UnionFind {
   }
 
   uint32_t get_num_sets() const { return num_sets; }
+
+  std::unordered_map<uint32_t, uint32_t> get_sizes() {
+    std::unordered_map<uint32_t, uint32_t> sizes;
+
+    for (uint32_t i = 0; i < parent.size(); i++) {
+      uint32_t rep = find(i);
+      sizes[rep]++;
+    }
+
+    return sizes;
+  }
 };

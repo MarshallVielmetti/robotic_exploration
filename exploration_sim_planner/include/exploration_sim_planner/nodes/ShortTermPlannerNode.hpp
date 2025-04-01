@@ -12,6 +12,7 @@
 
 #include "exploration_sim_planner/util/OgmView.hpp"
 #include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/point_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/path.hpp"
 
@@ -32,6 +33,8 @@ class ShortTermPlannerNode : public rclcpp::Node {
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr short_term_path_pub_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr committed_path_pub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr backup_path_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr backup_target_pub_;
 
   // When this timer triggers, replace the committed path with the current
   // candidate

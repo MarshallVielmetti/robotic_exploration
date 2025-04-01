@@ -8,6 +8,7 @@
 #include "exploration_sim_planner/short_term_planner/ShortTermPathPlanner.hpp"
 
 #include <Eigen/Dense>
+#include <cstddef>
 #include <iostream>
 #include <iterator>
 #include <optional>
@@ -17,8 +18,9 @@
 #include "exploration_sim_planner/util/AStar.hpp"
 #include "exploration_sim_planner/util/BSplineUtil.hpp"
 #include "exploration_sim_planner/util/EsdfUtil.hpp"
+#include "exploration_sim_planner/util/OmplDubinsPath.hpp"
 
-#define SAFETY_THRESHOLD 3  // 3 cells
+#define SAFETY_THRESHOLD 1  // 3 cells
 
 std::vector<Eigen::Vector2d> ShortTermPathPlanner::fit_smoothed_path(const Eigen::MatrixXd& ogm,
                                                                      const std::vector<Eigen::Vector2d>& global_path) {
@@ -98,6 +100,8 @@ std::optional<std::vector<Eigen::Vector2i>> ShortTermPathPlanner::fit_astar(
     auto result = astar.find_path(start_node, end_node, get_neighbor, h, comp);
 
     if (!result.has_value()) {
+      // Unable to find a path that goes through all the waypoints
+      // so just return what they have so far, unless i = 0
       return std::nullopt;
     }
 
@@ -148,6 +152,7 @@ BSplineUtil::CubicBSpline ShortTermPathPlanner::fit_cubic_bspline(const Eigen::M
 
   // Initial B-spline fitting with moderate smoothness
   auto spline = BSplineUtil::fitCubicBSpline(path, 0.8);
+  return spline;
 
   // Optimize the spline using gradient descent
   // Balance safety (0.7) vs path length (0.3)
@@ -184,4 +189,123 @@ std::vector<Eigen::Vector2d> ShortTermPathPlanner::shorten_path(const std::vecto
   }
 
   return shortened_path;
+}
+
+std::optional<std::vector<Eigen::Vector3d>> ShortTermPathPlanner::plan_backup(
+    const std::vector<Eigen::Vector2d>& smoothed_path, const std::vector<Eigen::Vector2d>& coverage_path,
+    const std::shared_ptr<OgmView>& ogm) {
+  auto backup_target = ShortTermPathPlanner::find_next_free_waypoint(ogm, coverage_path);
+
+  if (!backup_target.has_value()) {
+    return std::nullopt;
+  }
+
+  return compute_backup_dubins(smoothed_path, backup_target.value(), ogm);
+}
+
+std::optional<Eigen::Vector2d> ShortTermPathPlanner::find_next_free_waypoint(
+    const std::shared_ptr<OgmView>& ogm, const std::vector<Eigen::Vector2d>& coverage_path) {
+  Eigen::Vector2d free_node;
+  bool found_free = false;
+
+  // Find the first unknown node
+  uint32_t unknown_node_index = 0;  // 0 is robot so cant be that
+  for (uint32_t i = 0; i < coverage_path.size(); i++) {
+    if (ogm->get(coverage_path[i].x(), coverage_path[i].y()) == -1) {
+      unknown_node_index = i;
+      break;
+    }
+  }
+
+  if (unknown_node_index == 0) {
+    return std::nullopt;
+  }
+
+  for (uint32_t i = unknown_node_index; i < coverage_path.size(); i++) {
+    if (ogm->get(coverage_path[i].x(), coverage_path[i].y()) == 0) {
+      free_node = coverage_path[i];
+      found_free = true;
+      break;
+    }
+  }
+
+  if (!found_free) {
+    return std::nullopt;
+  }
+
+  return free_node;
+}
+
+std::optional<std::vector<Eigen::Vector3d>> ShortTermPathPlanner::compute_backup_dubins(
+    const std::vector<Eigen::Vector2d>& smoothed_path, const Eigen::Vector2d& backup_point,
+    const std::shared_ptr<OgmView>& ogm) {
+  size_t into_unknown = 0;
+
+  // Find the index of the first point in the smoothed_path that lies in unknown space
+  for (size_t i = 0; i < smoothed_path.size(); i++) {
+    auto cell = smoothed_path[i].cast<int>();
+
+    if (ogm->get(cell.x(), cell.y()) == -1) {
+      into_unknown = i;
+      break;
+    }
+  }
+
+  if (into_unknown == 0) {
+    return std::nullopt;
+  }
+
+  Eigen::Vector3d backup_point_3d(backup_point.x(), backup_point.y(), 0.0);
+
+  // Working backwards, compute a dubins path from each point on the path to the backup point
+  // If that path lies fully in free space, return it
+  for (int i = into_unknown - 1; i >= 0; i = i - 10) {
+    auto loc = smoothed_path[i];
+    // Convert to vector3d by adding angle between smoothed_path[i] and smoothed_path[i+1]
+    Eigen::Vector3d point(loc.x(), loc.y(), 0.0);
+    point[2] = atan2(smoothed_path[i + 1].y() - smoothed_path[i].y(), smoothed_path[i + 1].x() - smoothed_path[i].x());
+
+    // Guess that theta for backup point is angle between loc and backup_point
+    backup_point_3d[2] = atan2(backup_point.y() - loc.y(), backup_point.x() - loc.x());
+
+    auto dubins_path = OmplDubinsPath::compute_dubins_path(point, backup_point_3d);
+
+    if (!dubins_path.has_value()) {
+      continue;
+    }
+
+    // Print the path
+    std::cout << "PATH PATH\n\n\n" << std::endl;
+    for (const auto& point : dubins_path.value()) {
+      std::cout << point.transpose() << std::endl;
+    }
+
+    // check safety
+    if (ShortTermPathPlanner::check_dubins_path_safety(ogm, dubins_path.value())) {
+      std::cout << "actually found a backup" << std::endl;
+      return dubins_path;
+    }
+  }
+
+  return std::nullopt;
+}
+
+bool ShortTermPathPlanner::check_dubins_path_safety(const std::shared_ptr<OgmView>& ogm,
+                                                    const std::vector<Eigen::Vector3d>& path) {
+  std::cout << "Unsafe backup" << std::endl;
+  for (const auto& point : path) {
+    auto cell = point.head<2>().cast<int>();
+    if (cell.x() < 0 || cell.x() >= ogm->width() || cell.y() < 0 || cell.y() >= ogm->height()) {
+      std::cout << "this fails" << std::endl;
+      return false;
+    }
+
+    if (ogm->get(cell.x(), cell.y()) != 0) {
+      std::cout << "check fails (" << cell.x() << "," << cell.y() << ") " << ogm->get(cell.x(), cell.y()) << "."
+                << std::endl;
+      return false;
+    }
+  }
+
+  return true;
 }

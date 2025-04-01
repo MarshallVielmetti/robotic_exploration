@@ -23,6 +23,13 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(TBB REQUIRED)
 find_package(osqp REQUIRED)
 find_package(OsqpEigen REQUIRED)
+find_package(ompl REQUIRED)
+
+# Add these lines after finding OMPL
+if(OMPL_FOUND)
+  message(STATUS "Found OMPL: ${OMPL_INCLUDE_DIRS}")
+  include_directories(${OMPL_INCLUDE_DIRS})
+endif()
 
 # custom packages
 find_package(exploration_sim_msgs REQUIRED)
@@ -44,9 +51,9 @@ add_library(exploration_sim_planner_util SHARED
   src/util/MpcController.cpp
   src/util/DubinsPath.cpp
 )
-ament_target_dependencies(exploration_sim_planner_util std_msgs geometry_msgs nav_msgs exploration_sim_msgs Eigen3)
-target_link_libraries(exploration_sim_planner_util TBB::tbb ${OSQP_LIBRARIES} OsqpEigen::OsqpEigen)
-target_include_directories(exploration_sim_planner_util PRIVATE ${PROJECT_SOURCE_DIR}/include OsqpEigen::OsqpEigen)
+ament_target_dependencies(exploration_sim_planner_util std_msgs geometry_msgs nav_msgs exploration_sim_msgs Eigen3 ompl)
+target_link_libraries(exploration_sim_planner_util TBB::tbb ${OSQP_LIBRARIES} OsqpEigen::OsqpEigen ${OMPL_LIBRARIES})
+target_include_directories(exploration_sim_planner_util PRIVATE ${PROJECT_SOURCE_DIR}/include OsqpEigen::OsqpEigen ${OMPL_INCLUDE_DIRS})
 
 # Compile Pose Transform Listener
 add_executable(pose_listener src/nodes/PoseTransformListenerNode.cpp)
@@ -143,6 +150,15 @@ if(BUILD_TESTING)
     Eigen3
   )
   target_link_libraries(${PROJECT_NAME}_test exploration_sim_planner_util)
+
+  add_executable(ompl_dubins_test test/ompl_dubins_test.cpp)
+  ament_target_dependencies(ompl_dubins_test ompl)
+  target_include_directories(ompl_dubins_test PRIVATE ${OMPL_INCLUDE_DIRS})
+  target_link_libraries(ompl_dubins_test ${OMPL_LIBRARIES})
+  ament_add_test(ompl_dubins_test
+    COMMAND $<TARGET_FILE:ompl_dubins_test>
+  )
+
   
   # MPC test
   add_executable(mpc_test test/mpc_test.cpp)

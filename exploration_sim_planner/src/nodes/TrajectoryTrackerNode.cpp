@@ -21,30 +21,22 @@ TrajectoryTrackerNode::TrajectoryTrackerNode() : Node("trajectory_tracker") {
   RCLCPP_INFO(this->get_logger(), "Starting Trajectory Tracker Node");
 
   // Create a publisher for the steering angle
-  steering_publisher_ =
-      this->create_publisher<std_msgs::msg::Float64>("steering_angle", 10);
+  steering_publisher_ = this->create_publisher<std_msgs::msg::Float64>("steering_angle", 10);
 
-  lookahead_publisher_ =
-      this->create_publisher<geometry_msgs::msg::PointStamped>(
-          "lookahead_point", 10);
+  lookahead_publisher_ = this->create_publisher<geometry_msgs::msg::PointStamped>("lookahead_point", 10);
 
   // Create a subscriber for the path
   path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
-      "committed_path", 10, [this](const nav_msgs::msg::Path::SharedPtr msg) {
-        this->current_path_ = *msg;
-      });
+      "short_term_path", 10, [this](const nav_msgs::msg::Path::SharedPtr msg) { this->current_path_ = *msg; });
 
   // Subscribe to the robot pose
   pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "robot_pose", 10,
-      std::bind(&TrajectoryTrackerNode::pose_callback, this,
-                std::placeholders::_1));
+      "robot_pose", 10, std::bind(&TrajectoryTrackerNode::pose_callback, this, std::placeholders::_1));
 
   tracker_ = std::make_shared<PurePursuitTracker>();
 }
 
-void TrajectoryTrackerNode::pose_callback(
-    const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
+void TrajectoryTrackerNode::pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
   if (current_path_.poses.empty()) {
     RCLCPP_WARN(this->get_logger(), "No path to follow");
     return;
@@ -55,13 +47,12 @@ void TrajectoryTrackerNode::pose_callback(
     path.push_back(Eigen::Vector2d(pose.pose.position.x, pose.pose.position.y));
   }
 
-  Eigen::Vector2d curr_pose =
-      Eigen::Vector2d(msg->pose.position.x, msg->pose.position.y);
+  Eigen::Vector2d curr_pose = Eigen::Vector2d(msg->pose.position.x, msg->pose.position.y);
 
   double curr_angle = tf2::getYaw(msg->pose.orientation);
 
-  auto [steering_angle, target_point] = tracker_->compute_steering_angle(
-      path, curr_pose, curr_angle, LOOKAHEAD_DISTANCE);
+  auto [steering_angle, target_point] =
+      tracker_->compute_steering_angle(path, curr_pose, curr_angle, LOOKAHEAD_DISTANCE);
 
   std_msgs::msg::Float64 steering_msg;
   steering_msg.data = steering_angle;

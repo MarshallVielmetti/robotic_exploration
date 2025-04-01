@@ -1,0 +1,6 @@
+image: large_empty_map.pgm
+resolution: 0.5  # Same as in your slam_toolbox config
+origin: [-500.0, -500.0, 0.0]  # [x, y, yaw] - centers the map
+occupied_thresh: 0.65
+free_thresh: 0.196
+negate: 0
